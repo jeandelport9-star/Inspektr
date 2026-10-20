@@ -179,3 +179,81 @@ export function ratingsFor(it, inspectionType = 'ingoing') {
   if (!action && inspectionType === 'outgoing' && (clean === 'Dirty' || clean === 'Stained')) action = 'Tenant to clean';
   return { clean, damage, func: testable || func ? func : null, action };
 }
+
+// ---------- Priority categories (modelled on US report practice: Spectora, HomeGauge, InterNACHI) ----------
+// Most critical first. Security is grouped with safety because break-in risk is a first concern in South Africa.
+export const SEVERITY = [
+  { key: 'safety', label: 'Safety & security', short: 'Safety', desc: 'Risk of injury, or the property cannot be secured. Fix immediately.' },
+  { key: 'urgent', label: 'Urgent repair', short: 'Urgent', desc: 'Causing damage or loss of use now, or will get worse quickly.' },
+  { key: 'repair', label: 'Repair', short: 'Repair', desc: 'Broken or not working. Schedule a repair.' },
+  { key: 'maintenance', label: 'Maintenance', short: 'Maintenance', desc: 'Cosmetic, cleaning or routine upkeep.' },
+  { key: 'monitor', label: 'Monitor', short: 'Monitor', desc: 'No action yet. Check again at the next inspection.' },
+];
+export const SEVERITY_RANK = Object.fromEntries(SEVERITY.map((s, i) => [s.key, i]));
+
+const SAFETY_RE = /\b(exposed wires?|live wires?|bare wires?|sparks?|shock|burn(ing|t) smell|gas leak|smell of gas|no (pool )?(net|cover)|balustrade|broken glass|shattered|smoke detector|fire hazard|carbon monoxide|trip hazard|no earth)\b/;
+const SECURITY_ITEM = /^(locks and keys|gates|garage door motor|garage doors|alarm equipment|safety gate|doors & safety gate|electric fence|intercom|burglar bars|boundary walls)$/i;
+const SECURITY_TEXT = /\b(security gate|safety gate|burglar bars?|alarm|gate motor|electric fence|beams?|panic button|can'?t (lock|close)|does(n'?t| not) (lock|close)|won'?t (lock|close)|struggles? to (lock|unlock|close)|lock (is )?(not working|broken))\b/;
+const ENTRY_TEXT = /\b(front|outer|outside|back|sliding|garage) doors?\b|door to outside/;
+const OPENING_ITEM = /locks|doors|windows|gate/i;
+const OUTSIDE_ROOM = /garage|entrance|front|back|yard|patio|kitchen|scullery|living|lounge|dining|court|braai|lapa|outside/i;
+const URGENT_RE = /\b(leak(s|ing)?|roof leak|damp|water damage|mou?ld|moldy|sagg?ing|burst|flood|blocked|sewage|no water|water pressure|no electricity|no hot water|geyser|rising damp|large crack|structural|swollen|rot(ten)?)\b/;
+const MONITOR_RE = /\b(starting to crack|hairline|slight crack|minor crack|very slight|monitor|beginning to|signs of minor|lifting)\b/;
+const MAINT_RE = /\b(nails?|holes?|scuff|marks?|chip(s|ped)?|chiped|paint|patch(es|y)?|bulbs?|globes?|blown|clean|dirty|dust(y)?|stain(s|ed)?|grease|greasy|service|varnish|silicone|grout(ing)?|sticker|writing|pen marks?|worn|wear|prestik|cobwebs?|oil|tighten(ed)?|batter(y|ies)|emptied|scratch(es|ed)?)\b/;
+
+/** Auto-assigns a priority category to a finding, or null when it needs no attention. */
+export function severityOf(it, r) {
+  if (it.severity) return it.severity;
+  const cond = it.condition;
+  const needs = cond === 'defect' || cond === 'missing' || cond === 'fair' || Boolean(r?.action);
+  if (!needs || it.kind === 'note' || it.kind === 'meter') return null;
+  const name = (it.name || '').toLowerCase();
+  const text = (it.text || '').toLowerCase();
+  const t = ` ${name} ${text} `;
+  const bad = cond === 'defect' || cond === 'missing';
+  // 1. Safety: shock, fire, falls, cuts.
+  if (SAFETY_RE.test(t)) return 'safety';
+  if (/railings?/.test(t) && /stair|balcony|balustrade|railings/.test(`${name} ${it.room || ''}`.toLowerCase())) return 'safety';
+  if (/electrical sockets|light switches/.test(name) && (r?.damage === 'Cracked' || r?.damage === 'Damaged' || /cover|loose|broken|crack|exposed/.test(text))) return 'safety';
+  // 2. Security: outside doors, gates, alarm, burglar bars.
+  if (OPENING_ITEM.test(it.name || '') && (SECURITY_TEXT.test(t) || (bad && ENTRY_TEXT.test(t))) && !/paint|marks?|scratch/.test(text)) return 'safety';
+  if (/alarm|burglar bars?|electric fence|gate motor|security gate|safety gate/.test(name) && bad) return 'safety';
+  if (bad && SECURITY_ITEM.test(it.name || '') && (OUTSIDE_ROOM.test(it.room || '') || !/locks and keys/i.test(it.name || ''))) return 'safety';
+  // 3. Urgent: water, damp, sagging, no services.
+  if (/sagg?ing/.test(t)) return 'urgent';
+  if (URGENT_RE.test(t)) return MONITOR_RE.test(t) && !bad ? 'monitor' : 'urgent';
+  // 4. Monitor: early signs only.
+  if (MONITOR_RE.test(t) && cond === 'fair') return 'monitor';
+  // 5. Maintenance vs repair.
+  if (MAINT_RE.test(t) || ['Dirty', 'Dusty', 'Stained'].includes(r?.clean)) return bad && !MAINT_RE.test(t) ? 'repair' : 'maintenance';
+  return bad ? 'repair' : 'maintenance';
+}
+
+// ---------- Why it matters, and who should fix it (narrative library, InterNACHI style) ----------
+const EXPLAIN = [
+  [/exposed wires?|live wires?|bare wires?|sockets?|plugs?|switch(es)?|electrical|no earth/, 'Damaged electrical parts can give an electric shock or start a fire.', 'qualified electrician'],
+  [/leak|drip|tap|pipe|geyser|water pressure|toilet|cistern|basin|sink|shower|bath|drain/, 'Leaks waste water, push up the water bill and damage cupboards, floors and walls.', 'plumber'],
+  [/damp|mou?ld|moldy|water damage|water streaks?|rising damp/, 'Damp spreads, causes mould and peeling paint, and often points to a roof, gutter or plumbing leak.', 'waterproofing contractor'],
+  [/roof|gutters?|down ?pipes?|fascia|soffits?/, 'Roof and gutter faults let rain in and damage ceilings and wiring, especially in the summer rains.', 'roofing contractor'],
+  [/sagg?ing|cornice|cornis|ceiling/, 'Ceiling boards that sag or pull away can fall; it is usually caused by water damage.', 'ceiling contractor'],
+  [/locks?|striker|keys?|security gate|safety gate|burglar bars?|handles?/, 'Affects the security of the property and the tenant’s insurance cover.', 'locksmith'],
+  [/gate motor|garage door motor|remotes?|alarm|electric fence|beams?|intercom/, 'Security equipment that fails leaves the property exposed.', 'security technician'],
+  [/railings?|balustrade|stairs/, 'Loose or missing railings can cause a serious fall.', 'builder'],
+  [/tiles?|grout/, 'Loose or cracked tiles can cause trips and let water in behind them.', 'tiler'],
+  [/windows?|glass|louvre|pane/, 'Broken glass can cut, and windows that do not close affect security and weather-proofing.', 'glazier'],
+  [/crack/, 'Cracks let water in; wide or growing cracks may point to structural movement.', 'builder'],
+  [/doors?|hinges?|cupboards?|drawers?|knobs?|shelves/, 'Will get worse with daily use if not fixed.', 'handyman'],
+  [/bulbs?|globes?|lights?|chandelier/, 'Poor lighting is a trip and security risk.', 'electrician'],
+  [/aircon|extractor|fan/, 'Regular servicing keeps it working and avoids breakdowns.', 'HVAC technician'],
+  [/pool|pump|chlorinator|filter/, 'Pool equipment faults can turn the water green within days.', 'pool service'],
+  [/nails?|holes?|scuff|paint|marks?|chip|patch|writing|pen|prestik|sticker/, 'Cosmetic. Usually patched and painted before the next tenant moves in.', 'painter'],
+  [/dirty|dust|grease|greasy|stain|clean|cobweb/, 'Needs cleaning before handover.', 'cleaning service'],
+  [/garden|lawn|irrigation|paving|hedge/, 'Garden upkeep is usually the tenant’s responsibility under the lease.', 'garden service'],
+];
+
+/** One-line reason and suggested trade for a finding. */
+export function explain(it) {
+  const t = `${it.name || ''} ${it.text || ''}`.toLowerCase();
+  for (const [re, why, trade] of EXPLAIN) if (re.test(t)) return { why, trade };
+  return { why: '', trade: '' };
+}

@@ -1,15 +1,17 @@
 // Inspektr – app shell, routing and screens.
 
 import { loadState, saveState, clearState, clearMedia, putMedia, mediaUrl, uid } from './store.js';
-import { demoState, demoArt, TEMPLATES, TEMPLATE_LABELS } from './demo.js';
+import { demoState, demoArt, TEMPLATES, TEMPLATE_LABELS, withLegalDemo } from './demo.js';
 import {
   planSVG, roomsFor, matchRoom, unplacedItems, eventToPlan, roomAt, toRoomXY, autoSpot, normRoom,
 } from './floorplan.js';
 import { parsePhrase, createRecognizer, speechSupported } from './voice.js';
 import {
   analyse, conditionFrom, ratingsFor, standardItems, isTestable, KEYS_AND_METERS, CLEAN, DAMAGE, FUNC, ACTIONS,
+  SEVERITY, SEVERITY_RANK, severityOf, explain,
 } from './vocab.js';
 import { AGENCY, DISCLAIMER } from './config.js';
+import { legalChecks, lawRowsHTML, LAW_SOURCE, addDays } from './law.js';
 import { openCamera, stopStream, startRecording, captureStill, steady, artFor } from './recorder.js';
 import {
   $, $$, esc, fmtDate, fmtClock, fmtDuration, dueText, daysFrom, todayIso, toast, sound, buzz, icon, brandMark,
@@ -44,6 +46,12 @@ if ((state.version || 1) < 4) {
   state.properties.push(...fresh.properties.filter((p) => p.sample && !haveP.has(p.id)));
   state.inspections.push(...fresh.inspections.filter((i) => i.sample && !haveI.has(i.id)));
   state.version = 4;
+}
+if ((state.version || 1) < 5) {
+  // Demo and sample inspections: record consent and lease dates so the legal checks show how they work.
+  const demoIds = new Set(demoState().inspections.map((i) => i.id));
+  state.inspections.forEach((i) => { if (demoIds.has(i.id)) withLegalDemo(i); });
+  state.version = 5;
 }
 state.history = state.history || [];
 state.plans = state.plans || [];
@@ -93,26 +101,43 @@ let cleanup = [];
 const onCleanup = (fn) => cleanup.push(fn);
 
 function shell(active) {
+  const cur = (k) => (active === k ? 'aria-current="page"' : '');
   return `
+  <div class="shell">
+  <aside class="side" aria-label="Main">
+    <a class="logo" href="#/"><img src="assets/ava-mark.png" alt=""><span><b>Inspektr</b><small>by AVA</small></span></a>
+    <a class="btn btn--primary side-cta" href="#/new">${icon.rec}Start inspection</a>
+    <div class="grp">Work</div>
+    <a class="nav" href="#/" ${cur('home')}>${icon.map}Portfolio</a>
+    <a class="nav" href="#/planner" ${cur('planner')}>${icon.calendar}Planner<span class="nbadge" data-plan-badge hidden></span></a>
+    <a class="nav" href="#/repairs" ${cur('repairs')}>${icon.wrench}Repairs</a>
+    <div class="grp">Insights</div>
+    <a class="nav" href="#/dashboard" ${cur('dashboard')}>${icon.chart}Dashboard</a>
+    <a class="nav" href="#/branding" ${cur('branding')}>${icon.brush}Report builder</a>
+    <div class="side-foot">Inspections follow the Rental Housing Act 50 of 1999 (s5) and POPIA.</div>
+  </aside>
+  <div class="main-col">
   <header class="topbar">
-    <a class="brand" href="#/">${brandMark}<span class="brand-word">Inspekt<b>r</b></span></a>
+    <a class="brand" href="#/"><img src="assets/ava-mark.png" alt=""><span class="brand-word">Inspektr</span></a>
     <nav class="topnav" aria-label="Main">
-      <a href="#/" ${active === 'home' ? 'aria-current="page"' : ''}>Portfolio</a>
-      <a href="#/planner" ${active === 'planner' ? 'aria-current="page"' : ''}>Planner<span class="nbadge" data-plan-badge hidden></span></a>
-      <a href="#/dashboard" ${active === 'dashboard' ? 'aria-current="page"' : ''}>Dashboard</a>
-      <a href="#/repairs" ${active === 'repairs' ? 'aria-current="page"' : ''}>Repairs</a>
+      <a href="#/" ${cur('home')}>Portfolio</a>
+      <a href="#/planner" ${cur('planner')}>Planner<span class="nbadge" data-plan-badge hidden></span></a>
+      <a href="#/dashboard" ${cur('dashboard')}>Dashboard</a>
+      <a href="#/repairs" ${cur('repairs')}>Repairs</a>
     </nav>
     <div class="spacer"></div>
-    <a class="icon-btn icon-btn--bar" href="#/branding" title="Report builder" aria-label="Report builder" ${active === 'branding' ? 'aria-current="page"' : ''}>${icon.brush}</a>
+    <a class="icon-btn icon-btn--bar" href="#/branding" title="Report builder" aria-label="Report builder" ${cur('branding')}>${icon.brush}</a>
     <a class="btn btn--primary btn--sm" href="#/new">${icon.rec}Start inspection</a>
   </header>
   <main class="view" id="view"></main>
+  </div>
+  </div>
   <nav class="tabbar" aria-label="Main">
-    <a href="#/" ${active === 'home' ? 'aria-current="page"' : ''}>${icon.map}<span>Portfolio</span></a>
-    <a href="#/planner" ${active === 'planner' ? 'aria-current="page"' : ''}>${icon.calendar}<span>Planner</span><span class="nbadge" data-plan-badge hidden></span></a>
+    <a href="#/" ${cur('home')}>${icon.map}<span>Portfolio</span></a>
+    <a href="#/planner" ${cur('planner')}>${icon.calendar}<span>Planner</span><span class="nbadge" data-plan-badge hidden></span></a>
     <a href="#/new" class="tab-record"><span class="dot">${icon.rec}</span><span class="label">Inspect</span></a>
-    <a href="#/dashboard" ${active === 'dashboard' ? 'aria-current="page"' : ''}>${icon.chart}<span>Dashboard</span></a>
-    <a href="#/repairs" ${active === 'repairs' ? 'aria-current="page"' : ''}>${icon.wrench}<span>Repairs</span></a>
+    <a href="#/dashboard" ${cur('dashboard')}>${icon.chart}<span>Dashboard</span></a>
+    <a href="#/repairs" ${cur('repairs')}>${icon.wrench}<span>Repairs</span></a>
   </nav>`;
 }
 
@@ -394,7 +419,7 @@ async function openFinding(itemId, onClose) {
       </div>
       <div style="display:flex;justify-content:space-between;align-items:start;gap:12px">
         <div><h2 class="h3" style="font-size:21px">${esc(it.name)}${it.qty > 1 ? ` <span class="muted">×${it.qty}</span>` : ''}</h2><div class="muted small">${esc(it.room)}</div></div>
-        ${badge(it.condition, it.kind)}
+        <div style="display:grid;gap:6px;justify-items:end">${badge(it.condition, it.kind)}${sevBadge(sevOf(it, ins))}</div>
       </div>
       ${it.text ? `<blockquote class="quote">“${esc(it.text)}”</blockquote>` : ''}
       <dl class="kv">
@@ -434,6 +459,18 @@ const TYPE_DESC = {
   inventory: 'Furniture and contents only, with counts.',
 };
 
+function outgoingWindow(form) {
+  if (!form.leaseEnd) return '<span>The joint outgoing inspection must happen <b>within the 3 days before the lease ends</b>. Add the lease end date to check the window.</span>';
+  const today = todayIso();
+  const from = addDays(form.leaseEnd, -3);
+  const late = addDays(form.leaseEnd, 7);
+  const f = (x) => fmtDate(x);
+  if (today < from) return `<span class="warn">Too early: the joint inspection window is ${f(from)} to ${f(form.leaseEnd)}.</span>`;
+  if (today <= form.leaseEnd) return `<span class="ok">Inside the window (${f(from)} to ${f(form.leaseEnd)}).</span>`;
+  if (!form.present && today <= late) return `<span class="ok">The lease has ended. Without the tenant, the landlord must inspect by ${f(late)}.</span>`;
+  return `<span class="warn">The lease ended on ${f(form.leaseEnd)}. ${form.present ? 'The joint inspection should have been within the 3 days before. Note why on the report.' : `Without the tenant, the inspection was due by ${f(late)}.`}</span>`;
+}
+
 function viewNew(view, pid, params = new URLSearchParams()) {
   const props = state.properties;
   let p = prop(pid) || null;
@@ -444,6 +481,15 @@ function viewNew(view, pid, params = new URLSearchParams()) {
   }
   if (TYPE_LABEL[params.get('type')]) type = params.get('type');
   const plan = state.plans.find((x) => x.id === params.get('plan')) || null;
+  const form = { present: true, consent: false, disclosure: false, leaseEnd: p?.leaseEnd || '', leaseStart: p?.leaseStart || '' };
+  const keepForm = () => {
+    const g = (id) => $(id, view);
+    if (g('#nt')) form.present = g('#nt').checked;
+    if (g('#nc')) form.consent = g('#nc').checked;
+    if (g('#nd')) form.disclosure = g('#nd').checked;
+    if (g('#nle')) form.leaseEnd = g('#nle').value;
+    if (g('#nls')) form.leaseStart = g('#nls').value;
+  };
 
   function render() {
     const ingoing = p ? inspectionsFor(p.id).find((i) => i.type === 'ingoing') : null;
@@ -467,8 +513,21 @@ function viewNew(view, pid, params = new URLSearchParams()) {
       </div>
       <div class="row2">
         <div class="field"><label for="ni">Inspector</label><input class="input" id="ni" value="${esc(state.inspector || '')}" autocomplete="name"></div>
-        <div class="field"><span class="label">Tenant</span><label class="toggle"><input type="checkbox" id="nt" checked><span>Tenant is present</span></label></div>
+        <div class="field"><span class="label">Tenant</span><label class="toggle"><input type="checkbox" id="nt" ${form.present ? 'checked' : ''}><span>Tenant is present</span></label></div>
       </div>
+      <section class="legal">
+        <b>South African requirements</b>
+        ${type === 'ingoing' ? `<div class="row2">
+          <div class="field"><label for="nls">Lease start date</label><input class="input" type="date" id="nls" value="${esc(form.leaseStart)}"></div>
+          <div class="field"><label for="nle">Lease end date</label><input class="input" type="date" id="nle" value="${esc(form.leaseEnd)}"></div>
+        </div>
+        <span>The Rental Housing Act requires the landlord and tenant to inspect <b>together, before the tenant moves in</b>.${form.present ? '' : ' <span class="warn">The tenant is not marked as present.</span>'}</span>
+        <label class="toggle"><input type="checkbox" id="nd" ${form.disclosure ? 'checked' : ''}><span>The landlord’s signed mandatory disclosure form is attached to the lease (needed when an agent is involved)</span></label>` : ''}
+        ${type === 'outgoing' ? `<div class="field"><label for="nle">Lease end date</label><input class="input" type="date" id="nle" value="${esc(form.leaseEnd)}"></div>
+        ${outgoingWindow(form)}` : ''}
+        ${type === 'routine' ? '<span>Give the tenant reasonable notice and inspect at a reasonable time.</span>' : ''}
+        <label class="toggle"><input type="checkbox" id="nc" ${form.consent ? 'checked' : ''}><span>Everyone present knows this walk-through is recorded on video and audio, and why (POPIA)</span></label>
+      </section>
       ${p ? `<div class="field"><span class="label">Rooms on the plan, in walking order</span><div class="rooms-check">${roomsFor(p).map((r) => `<span class="room-chip">${esc(r.name)}</span>`).join('')}</div></div>` : ''}
       <section class="panel">
         <h2 class="h3">How to inspect</h2>
@@ -491,23 +550,32 @@ function viewNew(view, pid, params = new URLSearchParams()) {
   render();
 
   view.addEventListener('change', (e) => {
+    if (['nt', 'nle'].includes(e.target.id)) { keepForm(); const keep = $('#ni').value; render(); $('#ni').value = keep; return; }
     if (e.target.id === 'np') {
+      keepForm();
       p = prop(e.target.value) || null;
+      form.leaseEnd = p?.leaseEnd || ''; form.leaseStart = p?.leaseStart || '';
       if (p) type = inspectionsFor(p.id).some((i) => i.type === 'ingoing') ? 'routine' : 'ingoing';
       render();
     }
   });
   view.addEventListener('click', (e) => {
     const t = e.target.closest('.type-opt');
-    if (t) { type = t.dataset.t; const keep = $('#ni').value; render(); $('#ni').value = keep; return; }
+    if (t) { keepForm(); type = t.dataset.t; const keep = $('#ni').value; render(); $('#ni').value = keep; return; }
     if (e.target.closest('#go') && p) {
+      keepForm();
+      if (!form.consent) { toast('Confirm that everyone knows the inspection is recorded'); $('#nc')?.focus(); return; }
       state.inspector = $('#ni').value.trim() || state.inspector;
       const ingoing = inspectionsFor(p.id).find((i) => i.type === 'ingoing');
       const ins = {
         id: uid('i'), propertyId: p.id, type, date: todayIso(), createdAt: new Date().toISOString(),
-        inspector: state.inspector, status: 'recording', items: [], tenantPresent: $('#nt').checked,
+        inspector: state.inspector, status: 'recording', items: [], tenantPresent: form.present,
+        consent: { at: new Date().toISOString(), by: state.inspector || '' }, leaseEnd: form.leaseEnd || null,
+        disclosure: type === 'ingoing' ? form.disclosure : undefined,
         linkedId: type === 'outgoing' && ingoing ? ingoing.id : null, signatures: {},
       };
+      if (form.leaseEnd) p.leaseEnd = form.leaseEnd;
+      if (form.leaseStart) p.leaseStart = form.leaseStart;
       state.inspections.push(ins);
       if (plan && plan.propertyId === p.id) plan.inspectionId = ins.id;
       save();
@@ -975,6 +1043,7 @@ function ratingSelects(it, ins) {
     ${sel('damage', 'Damage', DAMAGE, r.damage)}
     ${sel('func', 'Function', FUNC, r.func)}
     ${sel('action', 'Recommendation', ACTIONS, r.action)}
+    <label class="rsel"><span>Priority</span><select class="select" data-f="severity"><option value="">Auto${(() => { const a = severityOf({ ...it, severity: null }, r); return a ? `: ${SEVERITY.find((x) => x.key === a).short}` : ''; })()}</option>${SEVERITY.map((x) => `<option value="${x.key}" ${it.severity === x.key ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
   </div>`;
 }
 
@@ -1101,6 +1170,7 @@ function viewReview(view, id) {
     if (f === 'name') it.name = e.target.value.trim() || it.name;
     if (f === 'qty') it.qty = Math.max(0, Number(e.target.value) || 0);
     if (f === 'cost') it.cost = e.target.value;
+    if (f === 'severity') { it.severity = e.target.value || null; save(); renderList(); return; }
     save();
     if (f === 'name') renderList();
   });
@@ -1173,6 +1243,11 @@ function viewSign(view, id) {
       </div>
     </div>
     <label class="toggle"><input type="checkbox" id="absent" ${ins.tenantPresent === false ? 'checked' : ''}><span>Tenant not present. Send the report for them to sign.</span></label>
+    <section class="legal" aria-live="polite">
+      <b>Legal checks (Rental Housing Act, POPIA)</b>
+      ${ins.type === 'outgoing' ? `<div class="field"><label for="sle">Lease end date</label><input class="input" type="date" id="sle" value="${esc(ins.leaseEnd || p.leaseEnd || '')}" style="max-width:220px"></div>` : ''}
+      <div id="legal"></div>
+    </section>
     ${defects.length ? `<label class="toggle"><input type="checkbox" id="jobs" checked><span>Send ${defects.length} repair${defects.length > 1 ? 's' : ''} to the owner for approval</span></label>` : ''}
     <button class="btn btn--primary btn--block" id="done">${icon.check}Sign and finish report</button>
   </div>`;
@@ -1193,8 +1268,18 @@ function viewSign(view, id) {
     return { canvas, name: () => $('input', el).value.trim(), inked: () => inked };
   });
 
+  const tenantDeductions = () => (ins.type === 'outgoing' ? ins.items.filter((i) => payerOf(i, ins) === 'tenant' && R_OF(i, ins).action).length : 0);
+  const drawLegal = () => {
+    const draft = { ...ins, tenantPresent: !$('#absent').checked, leaseEnd: $('#sle')?.value || ins.leaseEnd || p.leaseEnd || null };
+    $('#legal').innerHTML = lawRowsHTML(legalChecks(draft, { deductions: tenantDeductions() }), esc);
+  };
+  drawLegal();
+  $('#absent').addEventListener('change', drawLegal);
+  $('#sle')?.addEventListener('change', drawLegal);
+
   $('#done').addEventListener('click', () => {
     const absent = $('#absent').checked;
+    if ($('#sle')?.value) { ins.leaseEnd = $('#sle').value; p.leaseEnd = ins.leaseEnd; }
     const [t, o] = pads;
     if (!o.inked()) { toast('The agent or owner needs to sign'); return; }
     if (!absent && !t.inked()) { toast('The tenant needs to sign, or mark them as not present'); return; }
@@ -1219,7 +1304,7 @@ function viewSign(view, id) {
 // ============================================================ BRANDING (report builder)
 const BRAND_DEFAULT = {
   name: AGENCY.name, registration: AGENCY.registration, phone: AGENCY.phone, email: AGENCY.email, website: '', address: '',
-  logo: null, color: '#15212c', disclaimer: DISCLAIMER.join('\n'), footer: '', photoSize: 'medium',
+  logo: null, color: '#0b1f3a', disclaimer: DISCLAIMER.join('\n'), footer: '', photoSize: 'medium',
   sections: { toc: true, plan: true, disclaimer: true, photos: true, compare: true, keys: true },
 };
 function brand() {
@@ -1245,6 +1330,19 @@ function brandHeader(B, ref, extra = '') {
 
 // ============================================================ REPORT
 const REPORT_TITLE = { ingoing: 'Ingoing Inspection Report', outgoing: 'Outgoing Inspection Report', routine: 'Interim Inspection Report', inventory: 'Inventory Report' };
+const SEV_ICON = {
+  safety: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 20h19z" fill="currentColor"/><path d="M12 9v5M12 17h.01" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  urgent: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="currentColor"/><path d="M12 7v6l3.5 2" stroke="#fff" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>',
+  repair: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="currentColor"/><path d="M14.2 7.3a3.2 3.2 0 0 0-4.3 4.1L6.5 14.8l2.7 2.7 3.4-3.4a3.2 3.2 0 0 0 4.1-4.3l-2 2-1.9-.4-.4-1.9z" fill="#fff"/></svg>',
+  maintenance: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="currentColor"/><path d="M8 12.5 11 15.5 16.5 9" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
+  monitor: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="currentColor"/><circle cx="12" cy="12" r="3.2" fill="#fff"/></svg>',
+};
+const SEV = Object.fromEntries(SEVERITY.map((s) => [s.key, s]));
+const sevOf = (it, ins) => severityOf(it, R_OF(it, ins));
+function sevBadge(key, { short = false } = {}) {
+  if (!key) return '';
+  return `<span class="sev sev--${key}">${SEV_ICON[key]}<span>${esc(short ? SEV[key].short : SEV[key].label)}</span></span>`;
+}
 
 function viewReport(view, id) {
   const ins = insp(id);
@@ -1264,11 +1362,18 @@ function viewReport(view, id) {
   const order = [...planRooms.filter((r) => byRoom.has(r)), ...[...byRoom.keys()].filter((k) => !planRooms.includes(k))];
   order.forEach((room) => byRoom.get(room).sort(checklistOrder(room)));
   const notInspected = planRooms.filter((r) => !byRoom.has(r));
-  const actions = [
-    ...order.flatMap((room) => byRoom.get(room).filter((it) => R(it).action).map((it) => ({ it, room }))),
-    ...inventory.filter((it) => R(it).action).map((it) => ({ it, room: roomOf(it) })),
-  ];
-  const defects = items.filter((i) => i.condition === 'defect' || i.condition === 'missing');
+  const roomIndex = (room) => order.indexOf(room);
+
+  // Findings: everything that needs attention, sorted most critical first, then by room order.
+  const findings = [...inRooms, ...inventory]
+    .map((it) => ({ it, room: roomOf(it), sev: sevOf(it, ins) }))
+    .filter((f) => f.sev)
+    .sort((a, b) => SEVERITY_RANK[a.sev] - SEVERITY_RANK[b.sev] || roomIndex(a.room) - roomIndex(b.room));
+  const counts = Object.fromEntries(SEVERITY.map((s) => [s.key, findings.filter((f) => f.sev === s.key).length]));
+  const findNo = new Map();
+  SEVERITY.forEach((s) => findings.filter((f) => f.sev === s.key).forEach((f, i) => findNo.set(f.it.id, `${s.short[0]}${i + 1}`)));
+  const goodCount = inRooms.filter((i) => i.condition === 'good' && !sevOf(i, ins)).length;
+  const ratedCount = inRooms.filter((i) => i.condition !== 'unrated').length;
   const photoCount = items.reduce((n, i) => n + photosOf(i).length + (i.art && !i.photoId && !i.std ? 1 : 0), 0);
   const deductions = ins.type === 'outgoing' ? items.filter((i) => payerOf(i, ins) === 'tenant' && R(i).action) : [];
   const costOf = (i) => Number(i.cost) || i.job?.chosen?.price || 0;
@@ -1282,37 +1387,89 @@ function viewReport(view, id) {
   const chips = (r) => [r.clean, r.damage, r.func].filter(Boolean).map((v) => `<span class="rp-chip rp-chip--${ratingClass(v)}">${esc(v)}</span>`).join('');
   const actPill = (a) => (a ? `<span class="rp-act rp-act--${a.startsWith('Tenant') ? 'tenant' : 'landlord'}">${esc(a)}</span>` : '');
   const dt = (iso) => (iso ? new Date(iso).toLocaleString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '');
+  const critical = counts.safety + counts.urgent;
+  const attention = findings.length;
 
-  const photoGrid = (it) => {
+  const photoGrid = (it, max = 99) => {
     if (!S.photos) return '';
-    const ids = photosOf(it);
+    const ids = photosOf(it).slice(0, max);
     const cells = ids.length
       ? ids.map((pid, i) => `<figure class="rp-ph"><img data-photo="${esc(pid)}" data-item="${esc(it.id)}" alt="${esc(it.name)} photo ${i + 1}"><figcaption>${stampOf(ins, it.t)}</figcaption></figure>`)
-      : it.art && !it.std ? [`<figure class="rp-ph"><img src="${itemImageSync(it)}" alt="${esc(it.name)}"><figcaption>${stampOf(ins, it.t)}</figcaption></figure>`] : [];
+      : it.art && !it.std ? [`<figure class="rp-ph"><img src="${itemImageSync(it)}" alt="Illustration of ${esc(it.name)}"><figcaption>${stampOf(ins, it.t)}</figcaption></figure>`] : [];
     return cells.length ? `<div class="rp-photos">${cells.join('')}</div>` : '';
   };
 
-  const itemRow = (it, n) => {
-    const r = R(it);
+  const prevLine = (it) => {
+    if (!S.compare || !linked || it.std) return '';
     const prev = prevOf(it);
-    const pr = prev ? ratingsFor(prev, linked.type) : null;
-    const changed = prev && RANK[it.condition] > RANK[prev.condition];
-    const notDone = it.condition === 'unrated';
-    return `<tbody class="rp-item${notDone ? ' is-na' : ''}">
-      <tr>
-        <td class="n">${n}</td>
-        <td class="nm"><b>${esc(it.name)}</b>${it.t != null ? `<div class="tc data">${fmtClock(it.t)} in walk</div>` : ''}</td>
-        <td class="cd">${notDone ? '<span class="muted">Not inspected</span>' : chips(r)}${it.text ? `<div class="said">${esc(it.text)}</div>` : ''}
-          ${!S.compare ? '' : prev ? (chips(pr) === chips(r) && !prev.text && !changed ? '<div class="prev"><span class="prev-l">Ingoing</span><span class="muted">Same</span></div>' : `<div class="prev"><span class="prev-l">Ingoing</span>${chips(pr)}${prev.text ? ` <span class="said">${esc(prev.text)}</span>` : ''}${changed ? ' <span class="rp-change">Changed</span>' : ''}</div>`) : linked && !it.std ? '<div class="prev"><span class="prev-l">Ingoing</span><span class="muted">Not recorded</span></div>' : ''}</td>
-        <td class="rc">${actPill(r.action)}${it.job ? `<div class="tiny muted" style="margin-top:4px">${esc(JOB_LABEL[it.job.status] || '')}</div>` : ''}</td>
-      </tr>
-      ${photoGrid(it) ? `<tr class="phr"><td></td><td colspan="3">${photoGrid(it)}</td></tr>` : ''}
-    </tbody>`;
+    if (!prev) return '<div class="prev"><span class="prev-l">At ingoing</span><span class="muted">Not recorded</span></div>';
+    const pr = ratingsFor(prev, linked.type);
+    const changed = RANK[it.condition] > RANK[prev.condition];
+    return `<div class="prev"><span class="prev-l">At ingoing</span>${chips(pr)}${prev.text ? ` <span class="said">${esc(prev.text)}</span>` : ''}${changed ? ' <span class="rp-change">Got worse</span>' : ' <span class="rp-same">Same as ingoing</span>'}</div>`;
   };
+
+  // One finding, written the way good US reports do: what, why it matters, what to do and who.
+  const findingCard = ({ it, room, sev }) => {
+    const r = R(it);
+    const { why, trade } = explain(it);
+    const tradeTxt = trade ? `, by a ${trade}` : '';
+    const rec = r.action ? `${r.action}${tradeTxt}.` : sev === 'monitor' ? 'No action needed now. Check again at the next inspection.' : `Attend to this${tradeTxt}.`;
+    const cost = costOf(it);
+    return `<article class="fd fd--${sev}" id="f-${esc(it.id)}" data-sev="${sev}" data-who="${(r.action || '').startsWith('Tenant') ? 'tenant' : 'landlord'}">
+      <header class="fd-h">
+        <span class="fd-no">${findNo.get(it.id)}</span>
+        <div class="fd-t"><b>${esc(it.name)}</b>${it.kind === 'inventory' ? ` <span class="muted">×${it.qty}</span>` : ''}<span class="fd-room">${esc(room)}</span></div>
+        <div class="fd-tags">${sevBadge(sev, { short: true })}${actPill(r.action)}</div>
+        <label class="fd-pick no-print"><input type="checkbox" data-pick="${esc(it.id)}"><span>Repair list</span></label>
+      </header>
+      <div class="fd-b">
+        <div class="fd-txt">
+          <div class="fd-row"><span class="fd-l">Condition</span><span>${chips(r) || '<span class="muted">Not rated</span>'}</span></div>
+          ${it.text ? `<div class="fd-row"><span class="fd-l">Inspector noted</span><span class="fd-said">“${esc(it.text)}”</span></div>` : ''}
+          ${why ? `<div class="fd-row"><span class="fd-l">Why it matters</span><span>${esc(why)}</span></div>` : ''}
+          <div class="fd-row"><span class="fd-l">Recommendation</span><span><b>${esc(rec)}</b>${cost ? ` <span class="fd-cost">R${cost.toLocaleString('en-ZA')}</span>` : ''}${it.job ? ` <span class="muted small">Repair: ${esc(JOB_LABEL[it.job.status] || '')}</span>` : ''}</span></div>
+          ${prevLine(it)}
+        </div>
+        ${photoGrid(it, 3)}
+      </div>
+    </article>`;
+  };
+
+  // Room tables: items that need attention first, then a compact list of everything in order.
+  const roomSection = (room) => {
+    const list = byRoom.get(room);
+    const issues = list.filter((it) => sevOf(it, ins)).sort((a, b) => SEVERITY_RANK[sevOf(a, ins)] - SEVERITY_RANK[sevOf(b, ins)]);
+    const ok = list.filter((it) => !sevOf(it, ins) && it.condition !== 'unrated');
+    const na = list.filter((it) => !sevOf(it, ins) && it.condition === 'unrated');
+    return `<section class="rp-section rp-room" id="room-${slug(room)}">
+      <h2 class="rp-bar"><span>${esc(room)}</span><span class="rp-bar-meta">${issues.length ? `${issues.length} need${issues.length === 1 ? 's' : ''} attention` : 'All in order'}, ${list.length} items</span></h2>
+      ${issues.length ? `<table class="rm-issues"><tbody>${issues.map((it) => { const r = R(it); const sev = sevOf(it, ins); return `<tr>
+          <td class="rm-sev">${sevBadge(sev, { short: true })}</td>
+          <td class="rm-nm"><b>${esc(it.name)}</b>${S.photos && (photosOf(it).length || it.art) ? ` <a class="rm-ref" href="#f-${esc(it.id)}" data-jump="f-${esc(it.id)}">See ${findNo.get(it.id)}</a>` : ''}</td>
+          <td class="rm-cd">${chips(r)}${it.text ? `<div class="said">${esc(it.text)}</div>` : ''}${prevLine(it)}</td>
+          <td class="rm-rc">${actPill(r.action)}</td></tr>`; }).join('')}</tbody></table>` : ''}
+      ${ok.length ? `<div class="rm-ok"><div class="rm-ok-h">In good order <span>${ok.length}</span></div><ul>${ok.map((it) => `<li><b>${esc(it.name)}</b><span>${[R(it).clean, R(it).damage, R(it).func].filter(Boolean).map(esc).join(' · ')}</span>${it.text ? `<em>${esc(it.text)}</em>` : ''}</li>`).join('')}</ul></div>` : ''}
+      ${na.length ? `<p class="rm-na">Not inspected: ${na.map((i) => esc(i.name)).join(', ')}.</p>` : ''}
+    </section>`;
+  };
+
+  const sideNav = `<nav class="rp-nav no-print" aria-label="Report sections">
+    <a data-jump="summary">Summary</a>
+    ${attention ? `<a data-jump="findings">Findings <b>${attention}</b></a>${SEVERITY.filter((s) => counts[s.key]).map((s) => `<a class="sub" data-jump="sev-${s.key}"><i class="dot-${s.key}"></i>${s.short} <b>${counts[s.key]}</b></a>`).join('')}` : ''}
+    ${linked ? '<a data-jump="changes">Changes since ingoing</a>' : ''}
+    ${deductions.length ? '<a data-jump="deductions">Deposit deductions</a>' : ''}
+    <a data-jump="rooms">Room by room</a>
+    ${order.map((room) => { const n = byRoom.get(room).filter((i) => sevOf(i, ins)).length; return `<a class="sub" data-jump="room-${slug(room)}">${esc(room)}${n ? ` <b>${n}</b>` : ''}</a>`; }).join('')}
+    ${S.keys ? '<a data-jump="keys">Keys and meters</a>' : ''}
+    ${inventory.length ? '<a data-jump="inventory">Inventory</a>' : ''}
+    <a data-jump="legal">Legal requirements</a>
+    <a data-jump="comments">Comments and signatures</a>
+    ${S.disclaimer ? '<a data-jump="disclaimer">Terms</a>' : ''}
+  </nav>`;
 
   view.innerHTML = `
   <div class="report-wrap">
-    <div class="report-actions">
+    <div class="report-actions no-print">
       <div class="crumbs"><a href="#/property/${p.id}?i=${ins.id}">${esc(p.name)}</a><span>/</span><span>Report</span></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         ${ins.status !== 'signed' ? `<a class="btn" href="#/review/${ins.id}">Back to review</a>` : ''}
@@ -1321,107 +1478,148 @@ function viewReport(view, id) {
         <button class="btn btn--primary" id="print">${icon.print}Print or save PDF</button>
       </div>
     </div>
-    <article class="paper rp ps-${B.photoSize}" style="${brandStyle(B)}">
-      <section class="rp-cover">
-        ${brandHeader(B, ref)}
-        <h1 class="display rp-title">${REPORT_TITLE[ins.type]}</h1>
-        <div class="rp-addr">${esc(p.name)}<br><span class="muted">${esc(p.suburb)}</span></div>
-        <div class="rp-when">${fmtDate(ins.date, { day: 'numeric', month: 'long', year: 'numeric' })} ${timeOf(ins)}</div>
-        <dl class="rp-parties">
-          <div><dt>Landlord</dt><dd>${esc(p.owner || '')}</dd></div>
-          <div><dt>Tenant</dt><dd>${esc(sig.tenantName || p.tenant || '')}${ins.tenantPresent === false ? ' (not present)' : ''}</dd></div>
-          <div><dt>Inspector</dt><dd>${esc(ins.inspector || '')}</dd></div>
-          ${linked ? `<div><dt>Compared with</dt><dd>Ingoing inspection, ${fmtDate(linked.date)}</dd></div>` : ''}
-          <div><dt>Walk-through</dt><dd>${fmtDuration(ins.durationSec)}${ins.videoId ? ', video on file' : ''}</dd></div>
-          <div><dt>Status</dt><dd>${ins.status === 'signed' ? `Signed ${dt(ins.signedAt)}` : 'Draft, not yet signed'}</dd></div>
-        </dl>
-        <div class="rp-sum">
-          <div class="figure"><b>${order.length}</b><span>areas</span></div>
-          <div class="figure"><b>${inRooms.length}</b><span>items inspected</span></div>
-          <div class="figure figure--alert"><b>${actions.length}</b><span>recommended actions</span></div>
-          <div class="figure"><b>${photoCount}</b><span>photos</span></div>
-          ${ins.type === 'outgoing' ? `<div class="figure"><b>R${total.toLocaleString('en-ZA')}</b><span>deductions</span></div>` : ''}
-        </div>
-        ${S.plan ? `<div class="rp-plan">${planSVG(p, items.filter((i) => !i.std), { id: 'rp' })}</div>
-        <p class="tiny muted">Pins show where findings were recorded during the walk-through. Red marks a defect.</p>` : ''}
-      </section>
+    <div class="rp-layout">
+      ${sideNav}
+      <article class="paper rp ps-${B.photoSize}" style="${brandStyle(B)}">
+        <section class="rp-cover" id="summary">
+          ${brandHeader(B, ref)}
+          <h1 class="display rp-title">${REPORT_TITLE[ins.type]}</h1>
+          <div class="rp-cover-grid">
+            <div>
+              <div class="rp-addr">${esc(p.name)}<br><span class="muted">${esc(p.suburb)}</span></div>
+              <div class="rp-when">${fmtDate(ins.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, ${timeOf(ins)}</div>
+            </div>
+            <dl class="rp-parties">
+              <div><dt>Landlord</dt><dd>${esc(p.owner || '')}</dd></div>
+              <div><dt>Tenant</dt><dd>${esc(sig.tenantName || p.tenant || '')}${ins.tenantPresent === false ? ' (not present)' : ''}</dd></div>
+              <div><dt>Inspector</dt><dd>${esc(ins.inspector || '')}</dd></div>
+              ${linked ? `<div><dt>Compared with</dt><dd>Ingoing, ${fmtDate(linked.date)}</dd></div>` : ''}
+              <div><dt>Status</dt><dd>${ins.status === 'signed' ? `Signed ${fmtDate((ins.signedAt || ins.date).slice(0, 10))}` : 'Draft'}</dd></div>
+            </dl>
+          </div>
 
-      ${S.toc ? `<section class="rp-section rp-toc">
-        <h2>Contents</h2>
-        <ol class="toc">
-          ${S.disclaimer ? '<li><button data-jump="disclaimer">Disclaimer & terms</button></li>' : ''}
-          <li><button data-jump="actions">Recommended actions</button><span>${actions.length}</span></li>
-          ${linked ? '<li><button data-jump="changes">Changes since ingoing</button></li>' : ''}
-          ${deductions.length ? '<li><button data-jump="deductions">Deposit deductions</button></li>' : ''}
-          ${order.map((room) => { const d = byRoom.get(room).filter((i) => R(i).action).length; return `<li><button data-jump="room-${slug(room)}">${esc(room)}</button><span>${byRoom.get(room).length} items${d ? `, <b class="bad">${d} action${d > 1 ? 's' : ''}</b>` : ''}</span></li>`; }).join('')}
-          ${S.keys ? '<li><button data-jump="keys">Keys and meters</button></li>' : ''}
-          ${inventory.length ? '<li><button data-jump="inventory">Inventory</button></li>' : ''}
-          <li><button data-jump="comments">Comments and signatures</button></li>
-        </ol>
-        ${notInspected.length ? `<p class="small muted">Not inspected: ${notInspected.map(esc).join(', ')}.</p>` : ''}
-      </section>` : ''}
+          <div class="glance">
+            <p class="glance-lead">${attention
+              ? `<b>${attention} item${attention === 1 ? '' : 's'} need${attention === 1 ? 's' : ''} attention</b>${critical ? `, including <b class="bad">${critical} critical</b> (safety, security or urgent)` : ''}. ${goodCount} of ${ratedCount} items inspected are in good order.`
+              : `<b>Everything inspected is in good order.</b> ${ratedCount} items checked.`}</p>
+            <div class="sev-tiles">
+              ${SEVERITY.map((s) => `<button type="button" class="sev-tile sev-tile--${s.key}${counts[s.key] ? '' : ' is-zero'}" data-filter="${s.key}" aria-label="${s.label}: ${counts[s.key]}">
+                <span class="st-top">${SEV_ICON[s.key]}<b>${counts[s.key]}</b></span><span class="st-l">${s.label}</span><span class="st-d">${s.desc}</span></button>`).join('')}
+            </div>
+            <div class="rp-sum">
+              <div class="figure"><b>${order.length}</b><span>areas</span></div>
+              <div class="figure"><b>${inRooms.length}</b><span>items</span></div>
+              <div class="figure"><b>${ratedCount ? Math.round((goodCount / ratedCount) * 100) : 0}%</b><span>in good order</span></div>
+              <div class="figure"><b>${photoCount}</b><span>photos</span></div>
+              <div class="figure"><b>${fmtDuration(ins.durationSec)}</b><span>walk-through</span></div>
+              ${ins.type === 'outgoing' ? `<div class="figure"><b>R${total.toLocaleString('en-ZA')}</b><span>deductions</span></div>` : ''}
+            </div>
+          </div>
+          ${S.plan ? `<div class="rp-plan">${planSVG(p, items.filter((i) => !i.std), { id: 'rp' })}</div>
+          <p class="tiny muted">Where findings were recorded during the walk-through. Red marks a defect.</p>` : ''}
+        </section>
 
-      ${S.disclaimer && B.disclaimer.trim() ? `<section class="rp-section" id="disclaimer">
-        <h2 class="rp-bar">Disclaimer & terms</h2>
-        <ol class="rp-terms">${B.disclaimer.split('\n').map((t) => t.trim()).filter(Boolean).map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
-      </section>` : ''}
+        ${S.toc ? `<section class="rp-section rp-toc print-only">
+          <h2>Contents</h2>
+          <ol class="toc">
+            ${attention ? `<li><span>Findings by priority</span><span>${attention}</span></li>` : ''}
+            ${linked ? '<li><span>Changes since ingoing</span></li>' : ''}
+            ${deductions.length ? '<li><span>Deposit deductions</span></li>' : ''}
+            ${order.map((room) => { const d = byRoom.get(room).filter((i) => sevOf(i, ins)).length; return `<li><span>${esc(room)}</span><span>${byRoom.get(room).length} items${d ? `, <b class="bad">${d} to attend to</b>` : ''}</span></li>`; }).join('')}
+            ${S.keys ? '<li><span>Keys and meters</span></li>' : ''}
+            ${inventory.length ? '<li><span>Inventory</span></li>' : ''}
+            <li><span>Legal requirements</span></li>
+            <li><span>Comments and signatures</span></li>
+            ${S.disclaimer ? '<li><span>Terms</span></li>' : ''}
+          </ol>
+          ${notInspected.length ? `<p class="small muted">Not inspected: ${notInspected.map(esc).join(', ')}.</p>` : ''}
+        </section>` : ''}
 
-      <section class="rp-section" id="actions">
-        <h2 class="rp-bar">Recommended actions summary</h2>
-        ${actions.length ? `<table class="rp-table rp-acts"><thead><tr><th>#</th><th>Item</th><th class="num">Recommendation</th></tr></thead><tbody>
-          ${actions.map(({ it, room }, i) => `<tr><td class="n">${i + 1}</td><td><b>${esc(room)}</b> <span class="muted">·</span> ${esc(it.name)}<div class="said">${[R(it).clean, R(it).damage, R(it).func].filter(Boolean).join(', ')}${it.text ? `, ${esc(it.text)}` : ''}</div></td><td class="num">${actPill(R(it).action)}${ins.type === 'outgoing' && costOf(it) ? `<div class="tiny muted">R${costOf(it).toLocaleString('en-ZA')}</div>` : ''}</td></tr>`).join('')}
-        </tbody></table>` : '<p class="muted">No actions recommended.</p>'}
-      </section>
+        ${attention ? `<section class="rp-section" id="findings">
+          <div class="fd-head">
+            <h2 class="rp-h2">Findings by priority</h2>
+            <div class="fd-filters no-print" role="group" aria-label="Filter findings">
+              <button type="button" data-filter="all" aria-pressed="true">All <b>${attention}</b></button>
+              ${SEVERITY.filter((s) => counts[s.key]).map((s) => `<button type="button" data-filter="${s.key}" aria-pressed="false"><i class="dot-${s.key}"></i>${s.short} <b>${counts[s.key]}</b></button>`).join('')}
+              <span class="fd-sep"></span>
+              <button type="button" data-who-filter="landlord" aria-pressed="false">Landlord</button>
+              <button type="button" data-who-filter="tenant" aria-pressed="false">Tenant</button>
+            </div>
+          </div>
+          <p class="small muted" style="margin:4px 0 0">Most critical first. Each finding says what was found, why it matters, and what to do.</p>
+          ${SEVERITY.filter((s) => counts[s.key]).map((s) => `<div class="fd-group fd-group--${s.key}" id="sev-${s.key}">
+            <h3 class="fd-gh">${SEV_ICON[s.key]}<span>${s.label}</span><b>${counts[s.key]}</b><em>${s.desc}</em></h3>
+            ${findings.filter((f) => f.sev === s.key).map(findingCard).join('')}
+          </div>`).join('')}
+        </section>` : ''}
 
-      ${linked ? (() => {
-        const changes = [...inRooms, ...inventory].filter((it) => { const pv = prevOf(it); return !it.std && (!pv || RANK[it.condition] > RANK[pv.condition] || (it.kind === 'inventory' && pv.qty !== it.qty)); });
-        return `<section class="rp-section" id="changes"><h2 class="rp-bar">Changes since the ingoing inspection of ${fmtDate(linked.date)}</h2>
-        ${changes.length ? `<table class="rp-table"><thead><tr><th>Item</th><th>Ingoing</th><th>Outgoing</th></tr></thead><tbody>
-          ${changes.map((it) => { const pv = prevOf(it); return `<tr><td><b>${esc(roomOf(it))}</b> <span class="muted">·</span> ${esc(it.name)}${it.text ? `<div class="said">${esc(it.text)}</div>` : ''}</td><td>${pv ? chips(ratingsFor(pv, linked.type)) : '<span class="muted">Not recorded</span>'}</td><td>${chips(R(it))}${it.kind === 'inventory' && pv && pv.qty !== it.qty ? ` <span class="rp-change">${pv.qty} → ${it.qty}</span>` : ''}</td></tr>`; }).join('')}
-        </tbody></table>` : '<p class="muted">No changes found. Everything matches the ingoing report.</p>'}</section>`;
-      })() : ''}
+        ${linked ? (() => {
+          const changes = [...inRooms, ...inventory].filter((it) => { const pv = prevOf(it); return !it.std && (!pv || RANK[it.condition] > RANK[pv.condition] || (it.kind === 'inventory' && pv.qty !== it.qty)); });
+          return `<section class="rp-section" id="changes"><h2 class="rp-bar"><span>Changes since the ingoing inspection</span><span class="rp-bar-meta">${fmtDate(linked.date)}</span></h2>
+          ${changes.length ? `<table class="rp-table"><thead><tr><th>Item</th><th>At ingoing</th><th>Now</th></tr></thead><tbody>
+            ${changes.map((it) => { const pv = prevOf(it); return `<tr><td>${sevBadge(sevOf(it, ins), { short: true })} <b>${esc(roomOf(it))}</b> <span class="muted">·</span> ${esc(it.name)}${it.text ? `<div class="said">${esc(it.text)}</div>` : ''}</td><td>${pv ? chips(ratingsFor(pv, linked.type)) : '<span class="muted">Not recorded</span>'}</td><td>${chips(R(it))}${it.kind === 'inventory' && pv && pv.qty !== it.qty ? ` <span class="rp-change">${pv.qty} → ${it.qty}</span>` : ''}</td></tr>`; }).join('')}
+          </tbody></table>` : '<p class="muted">No changes found. Everything matches the ingoing report.</p>'}</section>`;
+        })() : ''}
 
-      ${deductions.length ? `<section class="rp-section" id="deductions"><h2 class="rp-bar">Deposit deductions</h2>
-        <p class="small muted">Items the tenant is responsible for, beyond fair wear and tear.</p>
-        <table class="rp-table"><thead><tr><th>Item</th><th>Recommendation</th><th class="num">Cost</th></tr></thead><tbody>
-        ${deductions.map((i) => `<tr><td><b>${esc(roomOf(i))}</b> <span class="muted">·</span> ${esc(i.name)}${i.text ? `<div class="said">${esc(i.text)}</div>` : ''}</td><td>${actPill(R(i).action)}</td><td class="num">${costOf(i) ? `R${costOf(i).toLocaleString('en-ZA')}` : '<span class="muted">To be quoted</span>'}</td></tr>`).join('')}
-        <tr class="tot"><td colspan="2"><b>Total</b></td><td class="num"><b>R${total.toLocaleString('en-ZA')}</b></td></tr></tbody></table></section>` : ''}
+        ${deductions.length ? `<section class="rp-section" id="deductions"><h2 class="rp-bar"><span>Deposit deductions</span><span class="rp-bar-meta">R${total.toLocaleString('en-ZA')}</span></h2>
+          <p class="small muted">Items the tenant is responsible for, beyond fair wear and tear.</p>
+          <table class="rp-table"><thead><tr><th>Item</th><th>Recommendation</th><th class="num">Cost</th></tr></thead><tbody>
+          ${deductions.map((i) => `<tr><td><b>${esc(roomOf(i))}</b> <span class="muted">·</span> ${esc(i.name)}${i.text ? `<div class="said">${esc(i.text)}</div>` : ''}</td><td>${actPill(R(i).action)}</td><td class="num">${costOf(i) ? `R${costOf(i).toLocaleString('en-ZA')}` : '<span class="muted">To be quoted</span>'}</td></tr>`).join('')}
+          <tr class="tot"><td colspan="2"><b>Total</b></td><td class="num"><b>R${total.toLocaleString('en-ZA')}</b></td></tr></tbody></table></section>` : ''}
 
-      ${order.map((room) => `<section class="rp-section rp-room" id="room-${slug(room)}">
-        <h2 class="rp-bar">${esc(room)}</h2>
-        <table class="rp-items"><thead><tr><th>#</th><th>Item</th><th>Condition</th><th class="num">Recommendation</th></tr></thead>
-        ${byRoom.get(room).map((it, i) => itemRow(it, i + 1)).join('')}
-        </table>
-      </section>`).join('')}
+        <section class="rp-section" id="rooms">
+          <h2 class="rp-h2">Room by room</h2>
+          <p class="small muted" style="margin:4px 0 0">Items that need attention are listed first in each room, followed by everything found in good order.</p>
+        </section>
+        ${order.map(roomSection).join('')}
 
-      ${S.keys ? `<section class="rp-section" id="keys">
-        <h2 class="rp-bar">Keys and meters</h2>
-        <table class="rp-items"><thead><tr><th>#</th><th>Item</th><th>Details</th><th></th></tr></thead>
-          ${(meters.length ? meters : [{ id: 'k1', name: 'Keys', text: '' }, { id: 'k2', name: 'Prepaid Electricity Meter', text: '' }, { id: 'k3', name: 'Water Meter', text: '' }]).map((m, i) => `<tbody class="rp-item"><tr><td class="n">${i + 1}</td><td class="nm"><b>${esc(m.name)}</b></td><td class="cd">${m.text ? esc(m.text) : '<span class="muted">Not recorded</span>'}</td><td></td></tr>${photoGrid(m) ? `<tr class="phr"><td></td><td colspan="3">${photoGrid(m)}</td></tr>` : ''}</tbody>`).join('')}
-        </table>
-      </section>` : ''}
+        ${S.keys ? `<section class="rp-section" id="keys">
+          <h2 class="rp-bar"><span>Keys and meters</span></h2>
+          <table class="rp-table"><tbody>
+            ${(meters.length ? meters : [{ id: 'k1', name: 'Keys', text: '' }, { id: 'k2', name: 'Prepaid Electricity Meter', text: '' }, { id: 'k3', name: 'Water Meter', text: '' }]).map((m) => `<tr><td style="width:32%"><b>${esc(m.name)}</b></td><td>${m.text ? esc(m.text) : '<span class="muted">Not recorded</span>'}${photoGrid(m)}</td></tr>`).join('')}
+          </tbody></table>
+        </section>` : ''}
 
-      ${inventory.length ? `<section class="rp-section" id="inventory"><h2 class="rp-bar">Inventory</h2>
-        <table class="rp-table"><thead><tr><th>Item</th><th>Area</th><th class="num">Qty</th><th>Condition</th></tr></thead><tbody>
-        ${inventory.map((i) => { const pv = prevOf(i); return `<tr><td><b>${esc(i.name)}</b>${i.text ? `<div class="said">${esc(i.text)}</div>` : ''}</td><td>${esc(roomOf(i))}</td><td class="num">${i.qty}${pv && pv.qty !== i.qty ? ` <span class="rp-change">was ${pv.qty}</span>` : ''}</td><td>${chips(R(i))}</td></tr>`; }).join('')}
-        </tbody></table></section>` : ''}
+        ${inventory.length ? `<section class="rp-section" id="inventory"><h2 class="rp-bar"><span>Inventory</span><span class="rp-bar-meta">${inventory.reduce((s, i) => s + (i.qty || 0), 0)} items</span></h2>
+          <table class="rp-table"><thead><tr><th>Item</th><th>Area</th><th class="num">Qty</th><th>Condition</th></tr></thead><tbody>
+          ${inventory.map((i) => { const pv = prevOf(i); return `<tr><td><b>${esc(i.name)}</b>${i.text ? `<div class="said">${esc(i.text)}</div>` : ''}</td><td>${esc(roomOf(i))}</td><td class="num">${i.qty}${pv && pv.qty !== i.qty ? ` <span class="rp-change">was ${pv.qty}</span>` : ''}</td><td>${chips(R(i))}</td></tr>`; }).join('')}
+          </tbody></table></section>` : ''}
 
-      <section class="rp-section" id="comments">
-        <h2 class="rp-bar">Comments</h2>
-        ${notes.length || ins.comments?.tenant || ins.comments?.agent ? `<dl class="rp-comments">
-          ${ins.comments?.agent ? `<div><dt>Agent or owner</dt><dd>${esc(ins.comments.agent)}</dd></div>` : ''}
-          ${ins.comments?.tenant ? `<div><dt>Tenant</dt><dd>${esc(ins.comments.tenant)}</dd></div>` : ''}
-          ${notes.map((n) => `<div><dt>${esc(roomOf(n))}, ${fmtClock(n.t)}</dt><dd>${esc(n.text || n.name)}</dd></div>`).join('')}
-        </dl>` : '<p class="muted">No comments.</p>'}
-        <h2 class="rp-bar" style="margin-top:28px">Signatures</h2>
-        <p class="small muted">By signing, both parties confirm that this report is a true record of the condition of the property at the date and time shown.</p>
-        <div class="rp-sigs">
-          <div class="rp-sig">${sig.tenantImg ? `<img src="${sig.tenantImg}" alt="Tenant signature">` : '<div class="sig-empty"></div>'}<b>${esc(sig.tenantName || p.tenant || 'Tenant')}</b><br><span class="muted">Tenant${sig.tenant ? `, signed ${dt(sig.tenantAt || ins.signedAt)}` : ins.tenantPresent === false ? ', not present at inspection' : ', signature outstanding'}</span></div>
-          <div class="rp-sig">${sig.ownerImg ? `<img src="${sig.ownerImg}" alt="Agent or owner signature">` : '<div class="sig-empty"></div>'}<b>${esc(sig.ownerName || ins.inspector || 'Agent')}</b><br><span class="muted">Agent or owner${sig.ownerImg ? `, signed ${dt(sig.ownerAt || ins.signedAt)}` : ''}</span></div>
-        </div>
-      </section>
-      <footer class="rp-foot">${B.footer ? `${esc(B.footer)} ` : ''}${esc(B.name || '')}${B.name ? ', ' : ''}recorded with Inspektr from a narrated video walk-through. Report ${ref}.</footer>
-    </article>
+        <section class="rp-section" id="legal">
+          <h2 class="rp-bar"><span>Legal requirements</span><span class="rp-bar-meta">South Africa</span></h2>
+          ${lawRowsHTML(legalChecks({ ...ins, leaseEnd: ins.leaseEnd || p.leaseEnd || null }, { deductions: deductions.length }), esc)}
+          <p class="law-src">${esc(LAW_SOURCE)}</p>
+        </section>
+
+        <section class="rp-section" id="comments">
+          <h2 class="rp-bar"><span>Comments</span></h2>
+          ${notes.length || ins.comments?.tenant || ins.comments?.agent ? `<dl class="rp-comments">
+            ${ins.comments?.agent ? `<div><dt>Agent or owner</dt><dd>${esc(ins.comments.agent)}</dd></div>` : ''}
+            ${ins.comments?.tenant ? `<div><dt>Tenant</dt><dd>${esc(ins.comments.tenant)}</dd></div>` : ''}
+            ${notes.map((n) => `<div><dt>${esc(roomOf(n))}, ${fmtClock(n.t)}</dt><dd>${esc(n.text || n.name)}</dd></div>`).join('')}
+          </dl>` : '<p class="muted">No comments.</p>'}
+          <h2 class="rp-bar" style="margin-top:28px"><span>Signatures</span></h2>
+          <p class="small muted">By signing, both parties confirm that this report is a true record of the condition of the property at the date and time shown.</p>
+          <div class="rp-sigs">
+            <div class="rp-sig">${sig.tenantImg ? `<img src="${sig.tenantImg}" alt="Tenant signature">` : '<div class="sig-empty"></div>'}<b>${esc(sig.tenantName || p.tenant || 'Tenant')}</b><br><span class="muted">Tenant${sig.tenant ? `, signed ${dt(sig.tenantAt || ins.signedAt)}` : ins.tenantPresent === false ? ', not present at inspection' : ', signature outstanding'}</span></div>
+            <div class="rp-sig">${sig.ownerImg ? `<img src="${sig.ownerImg}" alt="Agent or owner signature">` : '<div class="sig-empty"></div>'}<b>${esc(sig.ownerName || ins.inspector || 'Agent')}</b><br><span class="muted">Agent or owner${sig.ownerImg ? `, signed ${dt(sig.ownerAt || ins.signedAt)}` : ''}</span></div>
+          </div>
+        </section>
+
+        ${S.disclaimer && B.disclaimer.trim() ? `<section class="rp-section" id="disclaimer">
+          <h2 class="rp-bar"><span>Disclaimer & terms</span></h2>
+          <div class="sev-legend">${SEVERITY.map((s) => `<div>${sevBadge(s.key)}<span>${s.desc}</span></div>`).join('')}</div>
+          <ol class="rp-terms">${B.disclaimer.split('\n').map((t) => t.trim()).filter(Boolean).map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
+        </section>` : ''}
+        <footer class="rp-foot">${B.footer ? `${esc(B.footer)} ` : ''}${esc(B.name || '')}${B.name ? ', ' : ''}recorded with Inspektr from a narrated video walk-through. Report ${ref}.</footer>
+      </article>
+    </div>
+    <div class="picker-bar no-print" id="picker" hidden>
+      <span id="pickn"></span>
+      <button class="btn btn--sm" id="pick-copy">${icon.share}Copy repair list</button>
+      <button class="btn btn--primary btn--sm" id="pick-owner">${icon.wrench}Send to owner for approval</button>
+      <button class="btn btn--ghost btn--sm" id="pick-clear">Clear</button>
+    </div>
   </div>`;
   hydrateImages(view);
 
@@ -1432,17 +1630,66 @@ function viewReport(view, id) {
   document.head.append(st);
   onCleanup(() => st.remove());
 
+  // ----- filters, navigation and the repair list
+  let sevFilter = 'all';
+  let whoFilter = null;
+  const picked = new Set();
+  const applyFilter = () => {
+    $$('.fd', view).forEach((c) => { c.hidden = (sevFilter !== 'all' && c.dataset.sev !== sevFilter) || (whoFilter && c.dataset.who !== whoFilter); });
+    $$('.fd-group', view).forEach((g) => { g.hidden = !$$('.fd', g).some((c) => !c.hidden); });
+    $$('[data-filter]', view).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.filter === sevFilter)));
+    $$('[data-who-filter]', view).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.whoFilter === whoFilter)));
+  };
+  const paintPicker = () => {
+    $('#picker').hidden = !picked.size;
+    $('#pickn').textContent = `${picked.size} finding${picked.size === 1 ? '' : 's'} selected`;
+  };
   view.addEventListener('click', (e) => {
     const j = e.target.closest('[data-jump]');
-    if (j) document.getElementById(j.dataset.jump)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (j) { e.preventDefault(); document.getElementById(j.dataset.jump)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    const f = e.target.closest('[data-filter]');
+    if (f) {
+      sevFilter = f.dataset.filter === sevFilter && f.dataset.filter !== 'all' ? 'all' : f.dataset.filter;
+      applyFilter();
+      if (f.classList.contains('sev-tile')) document.getElementById('findings')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    const w = e.target.closest('[data-who-filter]');
+    if (w) { whoFilter = whoFilter === w.dataset.whoFilter ? null : w.dataset.whoFilter; applyFilter(); }
+  });
+  view.addEventListener('change', (e) => {
+    const c = e.target.closest('[data-pick]');
+    if (!c) return;
+    if (c.checked) picked.add(c.dataset.pick); else picked.delete(c.dataset.pick);
+    c.closest('.fd').classList.toggle('is-picked', c.checked);
+    paintPicker();
+  });
+  const pickedFindings = () => findings.filter((f) => picked.has(f.it.id));
+  $('#pick-clear').addEventListener('click', () => { picked.clear(); $$('[data-pick]', view).forEach((c) => { c.checked = false; c.closest('.fd').classList.remove('is-picked'); }); paintPicker(); });
+  $('#pick-copy').addEventListener('click', async () => {
+    const lines = [`Repair list: ${p.name}, ${REPORT_TITLE[ins.type]} ${fmtDate(ins.date)}`, ''];
+    SEVERITY.forEach((s) => {
+      const fs = pickedFindings().filter((f) => f.sev === s.key);
+      if (!fs.length) return;
+      lines.push(`${s.label.toUpperCase()}`);
+      fs.forEach((f) => { const r = R(f.it); const { trade } = explain(f.it); lines.push(`${findNo.get(f.it.id)}. ${f.room} · ${f.it.name}${f.it.text ? `: ${f.it.text}` : ''}. ${r.action || 'Attend to'}${trade ? ` (${trade})` : ''}.`); });
+      lines.push('');
+    });
+    try { await navigator.clipboard.writeText(lines.join('\n')); toast('Repair list copied'); } catch { toast('Could not copy. Select the text manually.'); }
+  });
+  $('#pick-owner').addEventListener('click', () => {
+    let n = 0;
+    pickedFindings().forEach(({ it }) => { if (!it.job) { it.job = { status: 'approval', created: todayIso() }; n += 1; } });
+    save();
+    toast(n ? `${n} repair${n === 1 ? '' : 's'} sent to the owner for approval` : 'These already have repair jobs');
   });
   $('#print').addEventListener('click', () => window.print());
   $('#copy').addEventListener('click', async () => {
     const lines = [
       `${REPORT_TITLE[ins.type]}: ${p.name}, ${p.suburb}`,
       `${fmtDate(ins.date)} ${timeOf(ins)}, inspector ${ins.inspector}`,
-      `${inRooms.length} items in ${order.length} areas, ${actions.length} recommended actions`,
-      ...actions.map(({ it, room }) => `- ${room} · ${it.name}: ${R(it).action}${it.text ? ` (${it.text})` : ''}`),
+      attention ? `${attention} items need attention (${SEVERITY.filter((s) => counts[s.key]).map((s) => `${counts[s.key]} ${s.short.toLowerCase()}`).join(', ')})` : 'Everything inspected is in good order',
+      ...findings.filter((f) => f.sev === 'safety' || f.sev === 'urgent').map((f) => `- ${SEV[f.sev].short}: ${f.room} · ${f.it.name}${f.it.text ? ` (${f.it.text})` : ''}`),
       ins.type === 'outgoing' ? `Deposit deductions: R${total.toLocaleString('en-ZA')}` : '',
     ].filter(Boolean).join('\n');
     try {
@@ -1489,7 +1736,7 @@ function viewRepairs(view) {
   function jobs() {
     const out = [];
     state.inspections.forEach((ins) => (ins.items || []).forEach((it) => { if (it.job) out.push({ it, ins, p: prop(ins.propertyId) }); }));
-    return out.filter((j) => j.p);
+    return out.filter((j) => j.p).sort((a, b) => (SEVERITY_RANK[sevOf(a.it, a.ins)] ?? 9) - (SEVERITY_RANK[sevOf(b.it, b.ins)] ?? 9));
   }
   let tab = jobs().some((j) => j.it.job.status === 'approval') ? 'approval' : 'progress';
 
@@ -1520,6 +1767,7 @@ function viewRepairs(view) {
       <div class="body">
         <div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><b>${esc(it.name)}</b>${jobBadge(it)}</div>
         <div class="muted small">${esc(p.name)}, ${esc(it.room)}</div>
+        ${sevOf(it, ins) ? `<div style="margin:4px 0 2px">${sevBadge(sevOf(it, ins))}</div>` : ''}
         <div class="faint tiny">Found in ${TYPE_LABEL[ins.type].toLowerCase()} inspection, ${fmtDate(ins.date)}</div>
       </div>
       <div class="foot">
@@ -1611,7 +1859,7 @@ function viewRepairs(view) {
 // ============================================================ DASHBOARD
 const TYPE_ORDER = ['ingoing', 'outgoing', 'routine', 'inventory'];
 // Categorical slots 1–4 (validated for CVD separation on the app's dark surface).
-const TYPE_COLOR = { ingoing: '#3987e5', outgoing: '#d95926', routine: '#199e70', inventory: '#c98500' };
+const TYPE_COLOR = { ingoing: '#2a78d6', outgoing: '#eb6834', routine: '#1baf7a', inventory: '#eda100' };
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** Every completed inspection as a summary: signed inspections plus imported history. */
@@ -1962,7 +2210,7 @@ function checkReminders() {
 setInterval(checkReminders, 30000);
 
 // ============================================================ REPORT BUILDER
-const BRAND_SWATCHES = ['#15212c', '#1f3a5f', '#0b5c4b', '#7a1f2b', '#b3261e', '#5b2a86', '#c26a00', '#2f4f4f'];
+const BRAND_SWATCHES = ['#0b1f3a', '#0f7a78', '#1f3a5f', '#0b5c4b', '#7a1f2b', '#b3261e', '#5b2a86', '#c26a00', '#2f4f4f'];
 const SECTION_LABELS = {
   toc: 'Contents page', plan: 'Floor plan with pins', disclaimer: 'Disclaimer & terms',
   photos: 'Photos', compare: 'Ingoing rating under each item (outgoing reports)', keys: 'Keys and meters',

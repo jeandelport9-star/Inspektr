@@ -123,7 +123,7 @@ export const icon = {
   reset: I('<path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6"/><path d="M4 4v4.6h4.6"/>'),
 };
 
-export const brandMark = `<svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#182636"/><g fill="none" stroke="#ff9f1c" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 24V14h10M40 14h10v10M50 40v10H40M24 50H14V40"/></g><circle cx="32" cy="32" r="6" fill="#ff5a4e"/></svg>`;
+export const brandMark = `<img class="brand-mark" src="assets/ava-mark.png" alt="">`;
 
 // ---------- Bottom sheet ----------
 export function openSheet(html, { onOpen, onClose } = {}) {

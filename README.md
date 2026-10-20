@@ -115,3 +115,11 @@ vendor/               Leaflet 1.9.4 and the Archivo font (bundled, no CDN)
 ```
 
 Map tiles: © OpenStreetMap contributors, © CARTO.
+
+## Priorities and South African legal checks
+
+- Every finding gets a priority: **Safety & security**, **Urgent repair**, **Repair**, **Maintenance** or **Monitor**. The report lists the critical ones first, each with what was found, why it matters and the recommendation (who fixes it, and which trade). Inspectors can override the priority in Review.
+- Before recording, the inspector confirms that everyone present knows the walk-through is recorded (POPIA).
+- Ingoing: joint inspection before move-in, lease dates, and the mandatory disclosure form (Property Practitioners Act s67).
+- Outgoing: the lease end date is checked against the Rental Housing Act windows (joint inspection within 3 days before the lease ends; within 7 days after if the tenant is absent), and the report shows the deposit refund deadline (7, 14 or 21 days).
+- The report ends with a "Legal requirements" section. This is guidance, not legal advice.

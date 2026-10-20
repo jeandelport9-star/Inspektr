@@ -273,7 +273,8 @@ export function demoState() {
 
   properties.push(...SAMPLES.properties);
   inspections.push(...SAMPLES.inspections);
-  return { version: 4, inspector: 'J. Delport', properties, inspections, history: demoHistory(), plans: demoPlans() };
+  inspections.forEach(withLegalDemo);
+  return { version: 5, inspector: 'J. Delport', properties, inspections, history: demoHistory(), plans: demoPlans() };
 }
 
 
@@ -318,4 +319,15 @@ export function demoPlans() {
     { id: 'pl_2', propertyId: 'p_hatfield', type: 'ingoing', date: d(3), time: '09:00', remind: 1440, notes: 'New tenant. Meet at the gate, collect access tag from body corporate.' },
     { id: 'pl_3', propertyId: 'p_lynnwood', type: 'routine', date: d(9), time: '14:30', remind: 60, notes: 'Check bathroom ceiling after waterproofing.' },
   ];
+}
+
+/** Demo inspections were done properly: consent recorded, lease dates known, disclosure form on file. */
+export function withLegalDemo(ins) {
+  if (!ins.consent) ins.consent = { at: `${ins.date}T08:00:00`, by: ins.inspector || '' };
+  if (ins.type === 'ingoing' && ins.disclosure == null) ins.disclosure = true;
+  if (ins.type === 'outgoing' && !ins.leaseEnd) {
+    const d = new Date(`${ins.date}T12:00:00`); d.setDate(d.getDate() + 2);
+    ins.leaseEnd = d.toISOString().slice(0, 10);
+  }
+  return ins;
 }
