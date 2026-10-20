@@ -855,3 +855,7 @@ body.is-recording .topbar, body.is-recording .tabbar { display: none; }
 .type-chip[data-t="outgoing"] { color: #f07a4a; }
 .type-chip[data-t="routine"] { color: #2fc08d; }
 .type-chip[data-t="inventory"] { color: #e3a21a; }
+.leaflet-control-layers { background: var(--surface) !important; color: var(--text); border: 1px solid var(--line) !important; border-radius: 10px !important; }
+.leaflet-control-layers-expanded { padding: 8px 12px !important; font-size: 14px; }
+.leaflet-control-layers label { margin: 3px 0; }
+.leaflet-control-layers-toggle { filter: invert(.85); }

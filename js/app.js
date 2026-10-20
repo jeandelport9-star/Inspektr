@@ -141,8 +141,13 @@ window.addEventListener('hashchange', route);
 const go = (hash) => { if (location.hash === hash) route(); else location.hash = hash; };
 
 // ============================================================ map helpers
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+const BASEMAPS = {
+  'Street map': ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: OSM_ATTR, maxZoom: 19 }],
+  Satellite: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics', maxZoom: 19 }],
+  Dark: ['https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: `${OSM_ATTR} &copy; <a href="https://carto.com/attributions">CARTO</a>`, subdomains: 'abcd', maxZoom: 20 }],
+};
+const BASEMAP_KEY = 'inspektr.basemap';
 
 function makeMap(el, opts = {}) {
   if (!window.L) {
@@ -150,7 +155,12 @@ function makeMap(el, opts = {}) {
     return null;
   }
   const map = L.map(el, { zoomControl: true, attributionControl: true, scrollWheelZoom: opts.scroll ?? false, ...opts });
-  L.tileLayer(TILE_URL, { attribution: TILE_ATTR, subdomains: 'abcd', maxZoom: 20 }).addTo(map);
+  const layers = Object.fromEntries(Object.entries(BASEMAPS).map(([name, [url, o]]) => [name, L.tileLayer(url, o)]));
+  let pick = 'Street map';
+  try { pick = localStorage.getItem(BASEMAP_KEY) || pick; } catch { /* ignore */ }
+  (layers[pick] || layers['Street map']).addTo(map);
+  L.control.layers(layers, null, { position: 'topright' }).addTo(map);
+  map.on('baselayerchange', (e) => { try { localStorage.setItem(BASEMAP_KEY, e.name); } catch { /* ignore */ } });
   onCleanup(() => map.remove());
   return map;
 }
