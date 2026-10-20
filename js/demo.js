@@ -1,5 +1,6 @@
 // Inspektr – demo portfolio so the app looks alive on first open.
 import { standardItems, isTestable, KEYS_AND_METERS } from './vocab.js';
+import { SAMPLES } from './samples.js';
 // Photos are drawn as small SVG scenes; real inspections use camera stills.
 
 const WALLS = ['#d9d3c7', '#cfd6d8', '#e2dccf', '#c9cfc4', '#ddd5cc', '#d3d8de'];
@@ -270,7 +271,9 @@ export function demoState() {
     ins.finalized = true;
   });
 
-  return { version: 3, inspector: 'J. Delport', properties, inspections, history: demoHistory(), plans: demoPlans() };
+  properties.push(...SAMPLES.properties);
+  inspections.push(...SAMPLES.inspections);
+  return { version: 4, inspector: 'J. Delport', properties, inspections, history: demoHistory(), plans: demoPlans() };
 }
 
 

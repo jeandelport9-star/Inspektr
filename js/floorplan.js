@@ -42,6 +42,12 @@ export function pinPos(room, item) {
   return { x, y };
 }
 
+/** Shortens a room label to fit its room width (about 1.3 plan units per character). */
+function fitLabel(name, w) {
+  const max = Math.max(4, Math.floor((w - 3) / 1.3));
+  return name.length <= max ? name : `${name.slice(0, max - 1).trimEnd()}…`;
+}
+
 const PIN_GLYPH = { defect: '!', missing: '?', unrated: '?', note: 'i', inventory: '#' };
 
 function pinClass(item) {
@@ -72,7 +78,7 @@ export function planSVG(property, items = [], opts = {}) {
     const active = activeRoom && normRoom(activeRoom) === normRoom(r.name);
     const done = doneRooms && doneRooms.has(normRoom(r.name));
     const label = mini ? '' : `
-      <text class="room-name" x="${r.x + 2.2}" y="${r.y + 3.6}">${esc(r.name)}</text>
+      <text class="room-name" x="${r.x + 2.2}" y="${r.y + 3.6}">${esc(fitLabel(r.name, r.w))}</text>
       <text class="room-area" x="${r.x + 2.2}" y="${r.y + 5.6}">${area} m²</text>`;
     return `<g class="room${active ? ' is-active' : ''}${done ? ' is-done' : ''}" data-room="${esc(r.name)}">
       <rect class="room-fill" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}"/>

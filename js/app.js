@@ -36,6 +36,15 @@ if ((state.version || 1) < 3) {
   state.plans = state.plans || fresh.plans;
   state.version = 3;
 }
+if ((state.version || 1) < 4) {
+  // Add the anonymised sample reports without touching anything the user recorded.
+  const fresh = demoState();
+  const haveP = new Set(state.properties.map((p) => p.id));
+  const haveI = new Set(state.inspections.map((i) => i.id));
+  state.properties.push(...fresh.properties.filter((p) => p.sample && !haveP.has(p.id)));
+  state.inspections.push(...fresh.inspections.filter((i) => i.sample && !haveI.has(i.id)));
+  state.version = 4;
+}
 state.history = state.history || [];
 state.plans = state.plans || [];
 const save = () => saveState(state);
@@ -204,8 +213,12 @@ function viewHome(view) {
     <div class="mapwrap vf"><span class="vf-b"></span><div class="map" id="map"></div><div class="map-hint">Tap a house to go inside</div></div>
     <section>
       <div class="section-head"><h2 class="h3">Properties</h2><span class="muted small">Most urgent first</span></div>
-      <div class="plist">${sortedProps().map(propertyCard).join('')}</div>
+      <div class="plist">${sortedProps().filter((p) => !p.sample).map(propertyCard).join('')}</div>
     </section>
+    ${props.some((p) => p.sample) ? `<section>
+      <div class="section-head"><h2 class="h3">Anonymised sample reports</h2><span class="muted small">Real South African inspections with all personal details removed</span></div>
+      <div class="plist">${sortedProps().filter((p) => p.sample).map(propertyCard).join('')}</div>
+    </section>` : ''}
     <p class="tiny faint">Data is stored on this device only. <button class="btn btn--ghost btn--sm" id="reset">${icon.reset}Reset demo data</button></p>
   </div>`;
 

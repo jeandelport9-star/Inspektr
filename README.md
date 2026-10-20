@@ -61,6 +61,11 @@ after a minute or two. The empty `.nojekyll` file makes Pages serve the files as
 
 **Reset demo data** is at the bottom of the Portfolio page.
 
+**Anonymised sample reports** (bottom of Portfolio) are ten real South African inspections converted
+into Inspektr format. Names, addresses, agencies, dates, photos, meter readings and security details
+were removed; only room structure, ratings, recommendations and the inspectors' wording remain.
+Photos in these reports are illustrations.
+
 ## Reports
 
 Reports follow South African practice: every room lists the standard checklist items, each rated
