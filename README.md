@@ -50,11 +50,11 @@ after a minute or two. The empty `.nojekyll` file makes Pages serve the files as
    - Or tap: shutter = photo, hold the shutter = defect photo, Good and Defect buttons.
    - Keyboard: <kbd>Space</kbd> photo, <kbd>D</kbd> defect, <kbd>G</kbd> good, <kbd>R</kbd> next room.
 5. **Review**: only the items that need a decision are shown. Drag pins to move them.
-6. **Sign-off**: tenant and agent sign on screen. Defects become repair jobs.
+6. **Sign-off**: tenant and agent sign on screen and add comments. Defects go to the owner for approval.
 7. **Report**: print or save as PDF. Outgoing reports compare against the ingoing one and list
    deposit deductions.
-8. **Repairs**: send a job to 3 contractors, choose a quote, add a completion photo.
-
+8. **Repairs**: the owner approves or declines each repair. Approved jobs go to 3 contractors;
+   choose a quote, then close the job with a completion photo.
 9. **Planner**: schedule inspections on a calendar. Reminders pop up while the app is open, and
    **Add to calendar** downloads a calendar file so your phone reminds you even when it is closed.
 10. **Dashboard**: inspections per month by type, most common defects, repairs and what is coming up.
@@ -68,7 +68,10 @@ for cleanliness (Clean, Dusty, Dirty, Stained, Rusted), damage (Undamaged, Wear 
 Cracked, Missing) and function (Working, Faulty, Unable to test), with a recommendation such as
 "Landlord to repair" or "Tenant to clean". Outgoing reports compare every item with the ingoing one.
 
-Put your agency name and your own disclaimer wording in `js/config.js`.
+**Report builder** (the brush icon in the top bar, or **Customise report** on any report): upload your
+company logo, set company details, brand colour, photo size, which sections appear, the disclaimer
+wording and a footer note. Settings are saved on the device and used for every report.
+`js/config.js` holds the defaults a new device starts with.
 
 ## Browser support
 

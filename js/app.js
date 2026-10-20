@@ -94,6 +94,7 @@ function shell(active) {
       <a href="#/repairs" ${active === 'repairs' ? 'aria-current="page"' : ''}>Repairs</a>
     </nav>
     <div class="spacer"></div>
+    <a class="icon-btn icon-btn--bar" href="#/branding" title="Report builder" aria-label="Report builder" ${active === 'branding' ? 'aria-current="page"' : ''}>${icon.brush}</a>
     <a class="btn btn--primary btn--sm" href="#/new">${icon.rec}Start inspection</a>
   </header>
   <main class="view" id="view"></main>
@@ -114,7 +115,7 @@ function route() {
   const [path, query = ''] = location.hash.replace(/^#\/?/, '').split('?');
   const params = new URLSearchParams(query);
   const [name, id] = path.split('/');
-  const active = ['repairs', 'dashboard', 'planner'].includes(name) ? name : name === '' ? 'home' : '';
+  const active = ['repairs', 'dashboard', 'planner', 'branding'].includes(name) ? name : name === '' ? 'home' : '';
   app.innerHTML = shell(active);
   const view = $('#view');
   window.scrollTo(0, 0);
@@ -125,6 +126,7 @@ function route() {
     new: () => viewNew(view, id, params),
     dashboard: () => viewDashboard(view),
     planner: () => viewPlanner(view, params),
+    branding: () => viewBranding(view),
     record: () => viewRecord(view, id),
     process: () => viewProcess(view, id),
     review: () => viewReview(view, id),
@@ -1201,6 +1203,33 @@ function viewSign(view, id) {
   });
 }
 
+// ============================================================ BRANDING (report builder)
+const BRAND_DEFAULT = {
+  name: AGENCY.name, registration: AGENCY.registration, phone: AGENCY.phone, email: AGENCY.email, website: '', address: '',
+  logo: null, color: '#15212c', disclaimer: DISCLAIMER.join('\n'), footer: '', photoSize: 'medium',
+  sections: { toc: true, plan: true, disclaimer: true, photos: true, compare: true, keys: true },
+};
+function brand() {
+  const b = state.brand || {};
+  return { ...BRAND_DEFAULT, ...b, sections: { ...BRAND_DEFAULT.sections, ...(b.sections || {}) } };
+}
+/** Black or white text, whichever reads better on the brand colour. */
+function inkOn(hex) {
+  const n = parseInt(String(hex).replace('#', ''), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+  const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return (L + 0.05) / 0.05 > 1.05 / (L + 0.05) ? '#111a22' : '#ffffff';
+}
+function brandStyle(B) { return `--brand:${B.color};--brand-ink:${inkOn(B.color)}`; }
+function brandHeader(B, ref, extra = '') {
+  const contact = [B.phone, B.email, B.website].filter(Boolean).map((c) => `<span>${esc(c)}</span>`).join('');
+  return `<div class="rp-head">
+    <div class="rp-brand">${B.logo ? `<img class="rp-logo" src="${B.logo}" alt="${esc(B.name || 'Company')} logo">` : '<img src="assets/icon.svg" alt="" class="rp-mark">'}
+      <div><div class="rp-co">${esc(B.name || 'Your company')}</div>${contact ? `<div class="rp-contact">${contact}</div>` : ''}${B.address ? `<div class="rp-contact"><span>${esc(B.address)}</span></div>` : ''}</div></div>
+    <div class="muted small" style="text-align:right">Report ${esc(ref)}${B.registration ? `<br>Reg. ${esc(B.registration)}` : ''}${extra}</div>
+  </div>`;
+}
+
 // ============================================================ REPORT
 const REPORT_TITLE = { ingoing: 'Ingoing Inspection Report', outgoing: 'Outgoing Inspection Report', routine: 'Interim Inspection Report', inventory: 'Inventory Report' };
 
@@ -1233,6 +1262,8 @@ function viewReport(view, id) {
   const total = deductions.reduce((s, i) => s + costOf(i), 0);
   const sig = ins.signatures || {};
   const ref = `INS-${ins.id.replace(/[^a-z0-9]/gi, '').slice(-6).toUpperCase()}`;
+  const B = brand();
+  const S = B.sections;
   const prevOf = (it) => linked?.items.find((x) => normRoom(x.room) === normRoom(it.room) && x.name.toLowerCase() === it.name.toLowerCase());
   const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-');
   const chips = (r) => [r.clean, r.damage, r.func].filter(Boolean).map((v) => `<span class="rp-chip rp-chip--${ratingClass(v)}">${esc(v)}</span>`).join('');
@@ -1240,6 +1271,7 @@ function viewReport(view, id) {
   const dt = (iso) => (iso ? new Date(iso).toLocaleString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '');
 
   const photoGrid = (it) => {
+    if (!S.photos) return '';
     const ids = photosOf(it);
     const cells = ids.length
       ? ids.map((pid, i) => `<figure class="rp-ph"><img data-photo="${esc(pid)}" data-item="${esc(it.id)}" alt="${esc(it.name)} photo ${i + 1}"><figcaption>${stampOf(ins, it.t)}</figcaption></figure>`)
@@ -1258,10 +1290,10 @@ function viewReport(view, id) {
         <td class="n">${n}</td>
         <td class="nm"><b>${esc(it.name)}</b>${it.t != null ? `<div class="tc data">${fmtClock(it.t)} in walk</div>` : ''}</td>
         <td class="cd">${notDone ? '<span class="muted">Not inspected</span>' : chips(r)}${it.text ? `<div class="said">${esc(it.text)}</div>` : ''}
-          ${prev ? (chips(pr) === chips(r) && !prev.text && !changed ? '<div class="prev"><span class="prev-l">Ingoing</span><span class="muted">Same</span></div>' : `<div class="prev"><span class="prev-l">Ingoing</span>${chips(pr)}${prev.text ? ` <span class="said">${esc(prev.text)}</span>` : ''}${changed ? ' <span class="rp-change">Changed</span>' : ''}</div>`) : linked && !it.std ? '<div class="prev"><span class="prev-l">Ingoing</span><span class="muted">Not recorded</span></div>' : ''}</td>
+          ${!S.compare ? '' : prev ? (chips(pr) === chips(r) && !prev.text && !changed ? '<div class="prev"><span class="prev-l">Ingoing</span><span class="muted">Same</span></div>' : `<div class="prev"><span class="prev-l">Ingoing</span>${chips(pr)}${prev.text ? ` <span class="said">${esc(prev.text)}</span>` : ''}${changed ? ' <span class="rp-change">Changed</span>' : ''}</div>`) : linked && !it.std ? '<div class="prev"><span class="prev-l">Ingoing</span><span class="muted">Not recorded</span></div>' : ''}</td>
         <td class="rc">${actPill(r.action)}${it.job ? `<div class="tiny muted" style="margin-top:4px">${esc(JOB_LABEL[it.job.status] || '')}</div>` : ''}</td>
       </tr>
-      ${photosOf(it).length || (it.art && !it.std) ? `<tr class="phr"><td></td><td colspan="3">${photoGrid(it)}</td></tr>` : ''}
+      ${photoGrid(it) ? `<tr class="phr"><td></td><td colspan="3">${photoGrid(it)}</td></tr>` : ''}
     </tbody>`;
   };
 
@@ -1271,16 +1303,14 @@ function viewReport(view, id) {
       <div class="crumbs"><a href="#/property/${p.id}?i=${ins.id}">${esc(p.name)}</a><span>/</span><span>Report</span></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         ${ins.status !== 'signed' ? `<a class="btn" href="#/review/${ins.id}">Back to review</a>` : ''}
+        <a class="btn" href="#/branding">${icon.brush}Customise report</a>
         <button class="btn" id="copy">${icon.share}Copy summary</button>
         <button class="btn btn--primary" id="print">${icon.print}Print or save PDF</button>
       </div>
     </div>
-    <article class="paper rp">
+    <article class="paper rp ps-${B.photoSize}" style="${brandStyle(B)}">
       <section class="rp-cover">
-        <div class="rp-head">
-          <div class="rp-brand"><img src="assets/icon.svg" alt="">${esc(AGENCY.name || 'Inspektr')}</div>
-          <div class="muted small" style="text-align:right">Report ${ref}${AGENCY.registration ? `<br>Reg. ${esc(AGENCY.registration)}` : ''}</div>
-        </div>
+        ${brandHeader(B, ref)}
         <h1 class="display rp-title">${REPORT_TITLE[ins.type]}</h1>
         <div class="rp-addr">${esc(p.name)}<br><span class="muted">${esc(p.suburb)}</span></div>
         <div class="rp-when">${fmtDate(ins.date, { day: 'numeric', month: 'long', year: 'numeric' })} ${timeOf(ins)}</div>
@@ -1299,29 +1329,29 @@ function viewReport(view, id) {
           <div class="figure"><b>${photoCount}</b><span>photos</span></div>
           ${ins.type === 'outgoing' ? `<div class="figure"><b>R${total.toLocaleString('en-ZA')}</b><span>deductions</span></div>` : ''}
         </div>
-        <div class="rp-plan">${planSVG(p, items.filter((i) => !i.std), { id: 'rp' })}</div>
-        <p class="tiny muted">Pins show where findings were recorded during the walk-through. Red marks a defect.</p>
+        ${S.plan ? `<div class="rp-plan">${planSVG(p, items.filter((i) => !i.std), { id: 'rp' })}</div>
+        <p class="tiny muted">Pins show where findings were recorded during the walk-through. Red marks a defect.</p>` : ''}
       </section>
 
-      <section class="rp-section rp-toc">
+      ${S.toc ? `<section class="rp-section rp-toc">
         <h2>Contents</h2>
         <ol class="toc">
-          <li><button data-jump="disclaimer">Disclaimer & terms</button></li>
+          ${S.disclaimer ? '<li><button data-jump="disclaimer">Disclaimer & terms</button></li>' : ''}
           <li><button data-jump="actions">Recommended actions</button><span>${actions.length}</span></li>
           ${linked ? '<li><button data-jump="changes">Changes since ingoing</button></li>' : ''}
           ${deductions.length ? '<li><button data-jump="deductions">Deposit deductions</button></li>' : ''}
           ${order.map((room) => { const d = byRoom.get(room).filter((i) => R(i).action).length; return `<li><button data-jump="room-${slug(room)}">${esc(room)}</button><span>${byRoom.get(room).length} items${d ? `, <b class="bad">${d} action${d > 1 ? 's' : ''}</b>` : ''}</span></li>`; }).join('')}
-          <li><button data-jump="keys">Keys and meters</button></li>
+          ${S.keys ? '<li><button data-jump="keys">Keys and meters</button></li>' : ''}
           ${inventory.length ? '<li><button data-jump="inventory">Inventory</button></li>' : ''}
           <li><button data-jump="comments">Comments and signatures</button></li>
         </ol>
         ${notInspected.length ? `<p class="small muted">Not inspected: ${notInspected.map(esc).join(', ')}.</p>` : ''}
-      </section>
+      </section>` : ''}
 
-      <section class="rp-section" id="disclaimer">
+      ${S.disclaimer && B.disclaimer.trim() ? `<section class="rp-section" id="disclaimer">
         <h2 class="rp-bar">Disclaimer & terms</h2>
-        <ol class="rp-terms">${DISCLAIMER.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
-      </section>
+        <ol class="rp-terms">${B.disclaimer.split('\n').map((t) => t.trim()).filter(Boolean).map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
+      </section>` : ''}
 
       <section class="rp-section" id="actions">
         <h2 class="rp-bar">Recommended actions summary</h2>
@@ -1351,12 +1381,12 @@ function viewReport(view, id) {
         </table>
       </section>`).join('')}
 
-      <section class="rp-section" id="keys">
+      ${S.keys ? `<section class="rp-section" id="keys">
         <h2 class="rp-bar">Keys and meters</h2>
         <table class="rp-items"><thead><tr><th>#</th><th>Item</th><th>Details</th><th></th></tr></thead>
-          ${(meters.length ? meters : [{ id: 'k1', name: 'Keys', text: '' }, { id: 'k2', name: 'Prepaid Electricity Meter', text: '' }, { id: 'k3', name: 'Water Meter', text: '' }]).map((m, i) => `<tbody class="rp-item"><tr><td class="n">${i + 1}</td><td class="nm"><b>${esc(m.name)}</b></td><td class="cd">${m.text ? esc(m.text) : '<span class="muted">Not recorded</span>'}</td><td></td></tr>${photosOf(m).length ? `<tr class="phr"><td></td><td colspan="3">${photoGrid(m)}</td></tr>` : ''}</tbody>`).join('')}
+          ${(meters.length ? meters : [{ id: 'k1', name: 'Keys', text: '' }, { id: 'k2', name: 'Prepaid Electricity Meter', text: '' }, { id: 'k3', name: 'Water Meter', text: '' }]).map((m, i) => `<tbody class="rp-item"><tr><td class="n">${i + 1}</td><td class="nm"><b>${esc(m.name)}</b></td><td class="cd">${m.text ? esc(m.text) : '<span class="muted">Not recorded</span>'}</td><td></td></tr>${photoGrid(m) ? `<tr class="phr"><td></td><td colspan="3">${photoGrid(m)}</td></tr>` : ''}</tbody>`).join('')}
         </table>
-      </section>
+      </section>` : ''}
 
       ${inventory.length ? `<section class="rp-section" id="inventory"><h2 class="rp-bar">Inventory</h2>
         <table class="rp-table"><thead><tr><th>Item</th><th>Area</th><th class="num">Qty</th><th>Condition</th></tr></thead><tbody>
@@ -1377,7 +1407,7 @@ function viewReport(view, id) {
           <div class="rp-sig">${sig.ownerImg ? `<img src="${sig.ownerImg}" alt="Agent or owner signature">` : '<div class="sig-empty"></div>'}<b>${esc(sig.ownerName || ins.inspector || 'Agent')}</b><br><span class="muted">Agent or owner${sig.ownerImg ? `, signed ${dt(sig.ownerAt || ins.signedAt)}` : ''}</span></div>
         </div>
       </section>
-      <footer class="rp-foot">${esc(AGENCY.name || '')}${AGENCY.name ? ', ' : ''}recorded with Inspektr from a narrated video walk-through. Report ${ref}.</footer>
+      <footer class="rp-foot">${B.footer ? `${esc(B.footer)} ` : ''}${esc(B.name || '')}${B.name ? ', ' : ''}recorded with Inspektr from a narrated video walk-through. Report ${ref}.</footer>
     </article>
   </div>`;
   hydrateImages(view);
@@ -1917,6 +1947,179 @@ function checkReminders() {
   badge.forEach((b) => { b.textContent = soon || ''; b.hidden = !soon; });
 }
 setInterval(checkReminders, 30000);
+
+// ============================================================ REPORT BUILDER
+const BRAND_SWATCHES = ['#15212c', '#1f3a5f', '#0b5c4b', '#7a1f2b', '#b3261e', '#5b2a86', '#c26a00', '#2f4f4f'];
+const SECTION_LABELS = {
+  toc: 'Contents page', plan: 'Floor plan with pins', disclaimer: 'Disclaimer & terms',
+  photos: 'Photos', compare: 'Ingoing rating under each item (outgoing reports)', keys: 'Keys and meters',
+};
+
+/** Shrinks an uploaded logo so it stays small enough to store and print sharply. */
+function readLogo(file) {
+  return new Promise((resolve, reject) => {
+    if (file.size > 8 * 1024 * 1024) { reject(new Error('That file is over 8 MB. Use a smaller logo.')); return; }
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('Could not read that file.'));
+    fr.onload = () => {
+      if (file.type === 'image/svg+xml') { resolve(fr.result); return; }
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 900 / img.width, 360 / img.height);
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/png'));
+      };
+      img.onerror = () => reject(new Error('That file is not an image Inspektr can read. Use PNG, JPG or SVG.'));
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+function viewBranding(view) {
+  const sample = state.inspections.filter((i) => i.status === 'signed' && (i.items || []).length).sort((a, b) => (a.type === 'outgoing' ? -1 : 1) - (b.type === 'outgoing' ? -1 : 1))[0];
+  const update = (patch) => {
+    const B = brand();
+    state.brand = { ...B, ...patch, sections: { ...B.sections, ...(patch.sections || {}) } };
+    save();
+    renderPreview();
+  };
+
+  const B0 = brand();
+  view.innerHTML = `
+  <div class="prop-head">
+    <div class="crumbs"><a href="#/">Portfolio</a><span>/</span><span>Report builder</span></div>
+    <div class="portfolio-head">
+      <div><h1 class="display h1">Report builder</h1><p class="lede">Your logo, details and wording on every report. Changes save as you type.</p></div>
+      ${sample ? `<a class="btn btn--primary" href="#/report/${sample.id}">Open a full sample report</a>` : ''}
+    </div>
+  </div>
+  <div class="builder">
+    <form class="stack builder-form" id="bform" autocomplete="off">
+      <section class="panel">
+        <h2 class="h3">Logo</h2>
+        <div class="logo-drop" id="drop">
+          <div class="logo-box" id="logobox"></div>
+          <div class="stack" style="gap:8px">
+            <label class="btn btn--sm" style="width:fit-content">${icon.upload}Upload logo<input type="file" id="logo" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden></label>
+            <button type="button" class="btn btn--ghost btn--sm" id="rmlogo" style="width:fit-content">Remove logo</button>
+            <span class="tiny muted">PNG with a transparent background or SVG works best. You can also drag a file here.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="h3">Company details</h2>
+        <div class="field"><label for="bn">Company name</label><input class="input" id="bn" data-k="name" value="${esc(B0.name || '')}" placeholder="e.g. Delport Property Inspections"></div>
+        <div class="row2">
+          <div class="field"><label for="br">Registration number</label><input class="input" id="br" data-k="registration" value="${esc(B0.registration || '')}" placeholder="e.g. 2026/123456/07"></div>
+          <div class="field"><label for="bp">Phone</label><input class="input" id="bp" data-k="phone" value="${esc(B0.phone || '')}" placeholder="e.g. 012 345 6789"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="be">Email</label><input class="input" id="be" data-k="email" value="${esc(B0.email || '')}" placeholder="e.g. inspections@company.co.za"></div>
+          <div class="field"><label for="bw">Website</label><input class="input" id="bw" data-k="website" value="${esc(B0.website || '')}" placeholder="e.g. company.co.za"></div>
+        </div>
+        <div class="field"><label for="ba">Address</label><input class="input" id="ba" data-k="address" value="${esc(B0.address || '')}" placeholder="Office address"></div>
+      </section>
+
+      <section class="panel">
+        <h2 class="h3">Brand colour</h2>
+        <p class="small muted" style="margin:0">Used for section headings. Text colour adjusts automatically so it stays readable.</p>
+        <div class="swatches" role="group" aria-label="Brand colour">
+          ${BRAND_SWATCHES.map((c) => `<button type="button" class="swatch" data-color="${c}" style="background:${c}" aria-label="Use colour ${c}" aria-pressed="${c.toLowerCase() === String(B0.color).toLowerCase()}"></button>`).join('')}
+          <label class="swatch swatch--custom" title="Choose any colour"><input type="color" id="bc" value="${esc(B0.color)}" aria-label="Choose any colour"><span>Custom</span></label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="h3">What the report includes</h2>
+        <div class="stack" style="gap:10px">
+          ${Object.entries(SECTION_LABELS).map(([k, label]) => `<label class="toggle"><input type="checkbox" data-sec="${k}" ${B0.sections[k] ? 'checked' : ''}><span>${label}</span></label>`).join('')}
+        </div>
+        <div class="field" style="margin-top:6px"><span class="label">Photo size</span>
+          <div class="seg" role="group" aria-label="Photo size">${['small', 'medium', 'large'].map((z) => `<button type="button" data-ps="${z}" aria-pressed="${B0.photoSize === z}">${z[0].toUpperCase()}${z.slice(1)}</button>`).join('')}</div>
+          <span class="tiny muted">Printed: small fits 4 per row, medium 3, large 2.</span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="h3">Wording</h2>
+        <div class="field"><label for="bd">Disclaimer & terms, one point per line</label><textarea class="input" id="bd" data-k="disclaimer" rows="9">${esc(B0.disclaimer)}</textarea>
+          <button type="button" class="btn btn--ghost btn--sm" id="resetd" style="width:fit-content">Restore the standard wording</button></div>
+        <div class="field"><label for="bf">Footer note</label><input class="input" id="bf" data-k="footer" value="${esc(B0.footer || '')}" placeholder="e.g. Member of the PPRA. FFC number 123456."></div>
+      </section>
+    </form>
+
+    <aside class="builder-preview">
+      <div class="section-head"><h2 class="h3">Preview</h2><span class="muted small">Cover and one room</span></div>
+      <div id="preview"></div>
+    </aside>
+  </div>`;
+
+  function renderPreview() {
+    const B = brand();
+    $('#logobox').innerHTML = B.logo ? `<img src="${B.logo}" alt="Your logo">` : '<span class="muted small">No logo yet</span>';
+    $('#rmlogo').hidden = !B.logo;
+    $$('.swatch[data-color]', view).forEach((s) => s.setAttribute('aria-pressed', String(s.dataset.color.toLowerCase() === String(B.color).toLowerCase())));
+    $$('[data-ps]', view).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.ps === B.photoSize)));
+    const chip = (v) => `<span class="rp-chip rp-chip--${ratingClass(v)}">${v}</span>`;
+    const ph = (kind, seed, t) => `<figure class="rp-ph"><img src="${demoArt(kind, seed)}" alt=""><figcaption>${t}</figcaption></figure>`;
+    $('#preview').innerHTML = `<article class="paper rp mini-report ps-${B.photoSize}" style="${brandStyle(B)}">
+      ${brandHeader(B, 'INS-2F81AC')}
+      <h1 class="display rp-title">Ingoing Inspection Report</h1>
+      <div class="rp-addr">12 Jacaranda Lane<br><span class="muted">Lynnwood, Pretoria</span></div>
+      <div class="rp-when">2 March 2026 09:30</div>
+      <dl class="rp-parties"><div><dt>Landlord</dt><dd>R. Pieterse</dd></div><div><dt>Tenant</dt><dd>Thandi Mokoena</dd></div><div><dt>Inspector</dt><dd>${esc(state.inspector || 'Inspector')}</dd></div></dl>
+      <section class="rp-section">
+        <h2 class="rp-bar">Kitchen</h2>
+        <table class="rp-items"><thead><tr><th>#</th><th>Item</th><th>Condition</th><th class="num">Recommendation</th></tr></thead>
+          <tbody class="rp-item"><tr><td class="n">1</td><td class="nm"><b>Taps</b><div class="tc data">2:46 in walk</div></td><td class="cd">${chip('Clean')}${chip('Undamaged')}${chip('Faulty')}<div class="said">Tap at the sink is dripping, washer needs replacing</div></td><td class="rc"><span class="rp-act rp-act--landlord">Landlord to repair</span></td></tr>
+          ${B.sections.photos ? `<tr class="phr"><td></td><td colspan="3"><div class="rp-photos">${ph('leak', 2, '02-03-2026 09:32:46')}${ph('leak', 5, '02-03-2026 09:32:49')}</div></td></tr>` : ''}</tbody>
+          <tbody class="rp-item"><tr><td class="n">2</td><td class="nm"><b>Oven</b></td><td class="cd">${chip('Dirty')}${chip('Undamaged')}${chip('Working')}<div class="said">Grease on the racks</div></td><td class="rc"><span class="rp-act rp-act--tenant">Tenant to clean</span></td></tr></tbody>
+        </table>
+      </section>
+      ${B.footer ? `<footer class="rp-foot">${esc(B.footer)}</footer>` : ''}
+    </article>`;
+  }
+  renderPreview();
+
+  let typing = null;
+  view.addEventListener('input', (e) => {
+    const k = e.target.dataset.k;
+    if (k) {
+      // Save every keystroke straight away; only the preview redraw waits.
+      const B = brand();
+      state.brand = { ...B, [k]: e.target.value };
+      save();
+      clearTimeout(typing); typing = setTimeout(renderPreview, 150);
+    }
+    if (e.target.id === 'bc') update({ color: e.target.value });
+  });
+  view.addEventListener('change', async (e) => {
+    if (e.target.dataset.sec) update({ sections: { [e.target.dataset.sec]: e.target.checked } });
+    if (e.target.id === 'logo' && e.target.files?.[0]) await takeLogo(e.target.files[0]);
+  });
+  view.addEventListener('click', (e) => {
+    const sw = e.target.closest('.swatch[data-color]');
+    if (sw) { update({ color: sw.dataset.color }); $('#bc').value = sw.dataset.color; return; }
+    const ps = e.target.closest('[data-ps]');
+    if (ps) { update({ photoSize: ps.dataset.ps }); return; }
+    if (e.target.closest('#rmlogo')) { update({ logo: null }); toast('Logo removed'); return; }
+    if (e.target.closest('#resetd')) { const d = DISCLAIMER.join('\n'); $('#bd').value = d; update({ disclaimer: d }); toast('Standard wording restored'); }
+  });
+  view.addEventListener('submit', (e) => e.preventDefault());
+  const drop = $('#drop');
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('is-over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+  drop.addEventListener('drop', async (e) => { e.preventDefault(); drop.classList.remove('is-over'); const f = e.dataTransfer.files?.[0]; if (f) await takeLogo(f); });
+
+  async function takeLogo(file) {
+    try { update({ logo: await readLogo(file) }); toast('Logo added to your reports'); }
+    catch (err) { toast(err.message || 'Could not use that file'); }
+  }
+}
 
 // ============================================================ ADD PROPERTY
 function viewAdd(view) {
