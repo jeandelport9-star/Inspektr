@@ -1,0 +1,234 @@
+// Inspektr – demo portfolio so the app looks alive on first open.
+// Photos are drawn as small SVG scenes; real inspections use camera stills.
+
+const WALLS = ['#d9d3c7', '#cfd6d8', '#e2dccf', '#c9cfc4', '#ddd5cc', '#d3d8de'];
+
+/** Draws a stylised "site photo" for demo findings. Returns a data URI. */
+export function demoArt(kind = 'item', seed = 1) {
+  const wall = WALLS[seed % WALLS.length];
+  const floor = ['#8a6f55', '#9b9b95', '#7c6a5a', '#a08a70'][seed % 4];
+  let subject = '';
+  switch (kind) {
+    case 'crack':
+      subject = `<path d="M150 20 l-14 34 l18 22 l-22 30 l12 26 l-16 40" fill="none" stroke="#3b3530" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+                 <path d="M154 76 l22 10 l8 18" fill="none" stroke="#3b3530" stroke-width="2"/>`;
+      break;
+    case 'leak':
+      subject = `<rect x="92" y="54" width="120" height="16" rx="6" fill="#9aa4ab"/>
+                 <rect x="140" y="30" width="22" height="30" rx="4" fill="#b8c0c6"/>
+                 <path d="M196 70 q10 0 10 14" fill="none" stroke="#9aa4ab" stroke-width="10" stroke-linecap="round"/>
+                 <path d="M206 100 q-6 10 0 16 q6 -6 0 -16z" fill="#4aa3df"/>
+                 <path d="M206 128 q-5 8 0 13 q5 -5 0 -13z" fill="#4aa3df" opacity=".7"/>
+                 <ellipse cx="206" cy="172" rx="34" ry="6" fill="#4aa3df" opacity=".35"/>`;
+      break;
+    case 'stain':
+      subject = `<path d="M110 40 c40 -16 90 4 92 40 c2 34 -40 54 -78 46 c-36 -8 -50 -70 -14 -86z" fill="#8c7a4e" opacity=".42"/>
+                 <path d="M126 58 c22 -8 52 2 54 22 c0 20 -24 30 -46 24 c-20 -6 -28 -38 -8 -46z" fill="#6e5d34" opacity=".35"/>`;
+      break;
+    case 'scratch':
+      subject = `<rect x="70" y="96" width="160" height="70" rx="6" fill="#7a5a3c"/>
+                 <path d="M96 118 l70 16 M104 130 l58 13 M180 112 l26 30" stroke="#d9c6ad" stroke-width="2.5" stroke-linecap="round"/>`;
+      break;
+    case 'tile':
+      subject = `<g stroke="#9d9a92" stroke-width="2">${Array.from({ length: 6 }, (_, i) => `<line x1="${40 + i * 44}" y1="20" x2="${40 + i * 44}" y2="180"/>`).join('')}${Array.from({ length: 4 }, (_, i) => `<line x1="20" y1="${40 + i * 44}" x2="300" y2="${40 + i * 44}"/>`).join('')}</g>
+                 <path d="M128 84 l14 12 l-8 16 l16 10" fill="none" stroke="#3b3530" stroke-width="2.5"/>`;
+      break;
+    case 'window':
+      subject = `<rect x="88" y="26" width="140" height="110" fill="#bcd6e6" stroke="#f2f2ee" stroke-width="10"/>
+                 <line x1="158" y1="26" x2="158" y2="136" stroke="#f2f2ee" stroke-width="8"/>
+                 <path d="M100 40 l40 50 M120 36 l-6 40 M100 80 l50 -10" stroke="#ffffff" stroke-width="2" opacity=".9"/>`;
+      break;
+    case 'door':
+      subject = `<rect x="118" y="14" width="86" height="170" fill="#a47c56" stroke="#e9e3d8" stroke-width="8"/>
+                 <circle cx="190" cy="104" r="6" fill="#d6c27a"/>`;
+      break;
+    case 'couch':
+      subject = `<rect x="70" y="92" width="180" height="58" rx="14" fill="#5d6873"/>
+                 <rect x="82" y="72" width="156" height="40" rx="12" fill="#6f7b86"/>
+                 <rect x="60" y="100" width="24" height="56" rx="10" fill="#56606a"/>
+                 <rect x="236" y="100" width="24" height="56" rx="10" fill="#56606a"/>`;
+      break;
+    case 'stove':
+      subject = `<rect x="96" y="60" width="128" height="120" rx="6" fill="#e4e6e8" stroke="#b6bbbf" stroke-width="3"/>
+                 <rect x="110" y="104" width="100" height="62" rx="4" fill="#2f3a44"/>
+                 ${[0, 1, 2, 3].map((i) => `<circle cx="${122 + i * 26}" cy="78" r="9" fill="#3a434c"/>`).join('')}`;
+      break;
+    case 'meter':
+      subject = `<rect x="104" y="44" width="112" height="112" rx="10" fill="#e9ecee" stroke="#9aa4ab" stroke-width="4"/>
+                 <rect x="122" y="80" width="76" height="26" rx="3" fill="#1d2a33"/>
+                 <text x="160" y="99" font-family="monospace" font-size="16" fill="#7cf0b4" text-anchor="middle">04812</text>`;
+      break;
+    default:
+      subject = `<rect x="96" y="70" width="128" height="96" rx="8" fill="#7d8790"/>
+                 <rect x="110" y="84" width="100" height="40" rx="4" fill="#9aa3ab"/>`;
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+    <defs>
+      <linearGradient id="w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${wall}"/><stop offset="1" stop-color="${shade(wall, -18)}"/></linearGradient>
+      <radialGradient id="v" cx=".5" cy=".45" r=".75"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".38"/></radialGradient>
+    </defs>
+    <rect width="320" height="200" fill="url(#w)"/>
+    <rect y="172" width="320" height="28" fill="${floor}"/>
+    ${subject}
+    <rect width="320" height="200" fill="url(#v)"/>
+  </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (v) => Math.max(0, Math.min(255, v + amt));
+  return `#${[(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => c(v).toString(16).padStart(2, '0')).join('')}`;
+}
+
+// ---------- Floor-plan templates (plan units: 100 wide × 64 high) ----------
+export const TEMPLATES = {
+  house3: [
+    { name: 'Lounge', x: 0, y: 0, w: 38, h: 30 },
+    { name: 'Kitchen', x: 38, y: 0, w: 26, h: 30 },
+    { name: 'Dining room', x: 64, y: 0, w: 36, h: 30 },
+    { name: 'Bedroom 1', x: 0, y: 30, w: 30, h: 34 },
+    { name: 'Bathroom', x: 30, y: 30, w: 18, h: 34 },
+    { name: 'Bedroom 2', x: 48, y: 30, w: 26, h: 34 },
+    { name: 'Bedroom 3', x: 74, y: 30, w: 26, h: 34 },
+  ],
+  flat2: [
+    { name: 'Lounge', x: 0, y: 0, w: 46, h: 34 },
+    { name: 'Kitchen', x: 46, y: 0, w: 26, h: 34 },
+    { name: 'Balcony', x: 72, y: 0, w: 28, h: 20 },
+    { name: 'Bathroom', x: 72, y: 20, w: 28, h: 14 },
+    { name: 'Bedroom 1', x: 0, y: 34, w: 50, h: 30 },
+    { name: 'Bedroom 2', x: 50, y: 34, w: 50, h: 30 },
+  ],
+  flat1: [
+    { name: 'Open-plan living', x: 0, y: 0, w: 60, h: 64 },
+    { name: 'Bedroom', x: 60, y: 0, w: 40, h: 40 },
+    { name: 'Bathroom', x: 60, y: 40, w: 40, h: 24 },
+  ],
+  townhouse: [
+    { name: 'Lounge', x: 0, y: 0, w: 40, h: 32 },
+    { name: 'Kitchen', x: 40, y: 0, w: 30, h: 32 },
+    { name: 'Garage', x: 70, y: 0, w: 30, h: 32 },
+    { name: 'Main bedroom', x: 0, y: 32, w: 40, h: 32 },
+    { name: 'En-suite', x: 40, y: 32, w: 20, h: 32 },
+    { name: 'Bedroom 2', x: 60, y: 32, w: 40, h: 32 },
+  ],
+};
+
+export const TEMPLATE_LABELS = {
+  house3: '3-bedroom house',
+  flat2: '2-bedroom flat',
+  flat1: '1-bedroom flat',
+  townhouse: 'Townhouse',
+};
+
+// ---------- Demo portfolio ----------
+const it = (room, name, condition, text, art, t, x, y, extra = {}) => ({
+  id: `d_${room}_${name}_${t}`.replace(/\W+/g, '_').toLowerCase(),
+  room, name, kind: 'item', qty: 1, condition, text, art, t, x, y,
+  confidence: 0.96, decision: 'accepted', ...extra,
+});
+const inv = (room, name, qty, condition, text, art, t, x, y, extra = {}) =>
+  it(room, name, condition, text, art, t, x, y, { kind: 'inventory', qty, ...extra });
+
+export function demoState() {
+  const properties = [
+    {
+      id: 'p_lynnwood', name: '12 Jacaranda Lane', suburb: 'Lynnwood, Pretoria', lat: -25.7663, lng: 28.2735,
+      template: 'house3', furnished: false, tenant: 'Thandi Mokoena', owner: 'R. Pieterse', nextDue: '2026-11-03',
+    },
+    {
+      id: 'p_hatfield', name: 'Unit 304, The Arches', suburb: 'Hatfield, Pretoria', lat: -25.7489, lng: 28.2385,
+      template: 'flat2', furnished: true, tenant: 'Kabelo Dlamini', owner: 'Arches Body Corporate', nextDue: '2026-10-31',
+    },
+    {
+      id: 'p_brooklyn', name: '7 Bronkhorst Mews', suburb: 'Brooklyn, Pretoria', lat: -25.7712, lng: 28.2361,
+      template: 'townhouse', furnished: false, tenant: 'Megan van Wyk', owner: 'M. Naidoo', nextDue: '2026-12-15',
+    },
+    {
+      id: 'p_garsfontein', name: '41 Rubida Street', suburb: 'Garsfontein, Pretoria', lat: -25.7928, lng: 28.2985,
+      template: 'house3', furnished: false, tenant: 'Johan & Elmarie Botha', owner: 'L. Khumalo', nextDue: '2027-01-20',
+    },
+    {
+      id: 'p_centurion', name: 'Unit 12, Eldo Lakes', suburb: 'Centurion', lat: -25.8662, lng: 28.1729,
+      template: 'flat1', furnished: true, tenant: 'Short-term guests', owner: 'S. Mahlangu', nextDue: '2026-10-24',
+    },
+  ];
+
+  const inspections = [
+    {
+      id: 'i_lyn_in', propertyId: 'p_lynnwood', type: 'ingoing', date: '2026-03-02', inspector: 'J. Delport',
+      status: 'signed', durationSec: 1284, signatures: { tenant: true, owner: true },
+      items: [
+        it('Lounge', 'Walls', 'good', 'Walls freshly painted, no marks.', 'item', 42, 0.3, 0.4),
+        it('Lounge', 'Sliding door', 'good', 'Sliding door runs smoothly, lock works.', 'door', 71, 0.8, 0.2),
+        it('Kitchen', 'Stove', 'good', 'Stove, four plates, all working, oven clean.', 'stove', 188, 0.5, 0.3),
+        it('Kitchen', 'Sink tap', 'good', 'Tap at the sink fine, no drip.', 'leak', 214, 0.2, 0.7),
+        it('Dining room', 'Ceiling', 'good', 'Ceiling clean, light fitting works.', 'item', 320, 0.5, 0.5),
+        it('Bedroom 1', 'Built-in cupboards', 'fair', 'Cupboards, one hinge loose on the left door.', 'door', 455, 0.25, 0.35),
+        it('Bathroom', 'Floor tiles', 'good', 'Floor tiles intact.', 'tile', 540, 0.5, 0.6),
+        it('Bedroom 2', 'Window', 'good', 'Window and burglar bars in good order.', 'window', 610, 0.7, 0.15),
+        it('Bedroom 3', 'Carpet', 'good', 'Carpet clean.', 'item', 702, 0.5, 0.6),
+        it('Lounge', 'Electricity meter', 'good', 'Prepaid meter reading 04812 units.', 'meter', 1201, 0.08, 0.85, { kind: 'note' }),
+      ],
+    },
+    {
+      id: 'i_lyn_routine', propertyId: 'p_lynnwood', type: 'routine', date: '2026-09-14', inspector: 'J. Delport',
+      status: 'signed', durationSec: 846, linkedId: 'i_lyn_in', signatures: { tenant: true, owner: true },
+      items: [
+        it('Kitchen', 'Sink tap', 'defect', 'Tap at the sink is dripping, washer needs replacing.', 'leak', 166, 0.22, 0.68, { job: { status: 'quoted', trade: 'Plumbing', quotes: 3, best: 'R480' } }),
+        it('Bathroom', 'Ceiling', 'defect', 'Damp stain on the bathroom ceiling above the shower.', 'stain', 402, 0.6, 0.25, { job: { status: 'open', trade: 'Waterproofing', quotes: 1 } }),
+        it('Bedroom 2', 'Wall', 'defect', 'Crack in the wall next to the window, about forty centimetres.', 'crack', 571, 0.82, 0.42, { job: { status: 'open', trade: 'Building', quotes: 0 } }),
+        it('Lounge', 'Walls', 'good', 'Lounge walls good.', 'item', 40, 0.3, 0.4),
+        it('Dining room', 'Ceiling', 'good', 'Dining ceiling good.', 'item', 280, 0.5, 0.5),
+        it('Bedroom 1', 'Built-in cupboards', 'fair', 'Cupboard hinge still loose, tenant aware.', 'door', 488, 0.25, 0.35),
+      ],
+    },
+    {
+      id: 'i_hat_in', propertyId: 'p_hatfield', type: 'ingoing', date: '2025-11-01', inspector: 'J. Delport',
+      status: 'signed', durationSec: 1530, signatures: { tenant: true, owner: true },
+      items: [
+        inv('Lounge', 'Couch', 1, 'good', 'Three-seater couch, grey, good.', 'couch', 60, 0.35, 0.5),
+        inv('Lounge', 'Bar stools', 2, 'fair', 'Two bar stools, oak, one scratched.', 'scratch', 92, 0.85, 0.7),
+        inv('Kitchen', 'Dining chairs', 4, 'good', 'Four dining chairs, black, good.', 'item', 205, 0.5, 0.6),
+        it('Kitchen', 'Stove', 'good', 'Stove and extractor working.', 'stove', 230, 0.3, 0.25),
+        it('Balcony', 'Sliding door', 'good', 'Balcony slider locks.', 'door', 340, 0.5, 0.5),
+        it('Bathroom', 'Shower tiles', 'good', 'Shower tiles and grout clean.', 'tile', 420, 0.5, 0.5),
+        inv('Bedroom 1', 'Double bed', 1, 'good', 'Double bed with mattress, good.', 'item', 610, 0.5, 0.45),
+        inv('Bedroom 2', 'Desk', 1, 'good', 'Desk and chair, good.', 'item', 790, 0.6, 0.4),
+      ],
+    },
+    {
+      id: 'i_bro_routine', propertyId: 'p_brooklyn', type: 'routine', date: '2026-06-10', inspector: 'J. Delport',
+      status: 'signed', durationSec: 702, signatures: { tenant: true, owner: true },
+      items: [
+        it('Lounge', 'Walls', 'good', 'Walls good.', 'item', 30, 0.4, 0.4),
+        it('Kitchen', 'Stove', 'good', 'Stove working.', 'stove', 120, 0.5, 0.3),
+        it('Garage', 'Garage door motor', 'good', 'Garage motor and remotes work.', 'door', 260, 0.5, 0.5),
+        it('En-suite', 'Basin', 'good', 'Basin and tap fine.', 'leak', 410, 0.5, 0.4),
+      ],
+    },
+    {
+      id: 'i_gar_routine', propertyId: 'p_garsfontein', type: 'routine', date: '2026-08-21', inspector: 'J. Delport',
+      status: 'signed', durationSec: 910, signatures: { tenant: true, owner: true },
+      items: [
+        it('Bathroom', 'Floor tiles', 'defect', 'Cracked floor tile in front of the toilet.', 'tile', 380, 0.45, 0.7, { job: { status: 'done', trade: 'Tiling', quotes: 3, best: 'R650' } }),
+        it('Lounge', 'Window', 'defect', 'Lounge window pane cracked in the corner.', 'window', 75, 0.15, 0.1, { job: { status: 'open', trade: 'Glazing', quotes: 2 } }),
+        it('Kitchen', 'Stove', 'good', 'Stove fine.', 'stove', 190, 0.5, 0.3),
+      ],
+    },
+    {
+      id: 'i_cen_inv', propertyId: 'p_centurion', type: 'inventory', date: '2026-10-01', inspector: 'J. Delport',
+      status: 'signed', durationSec: 640, signatures: { tenant: false, owner: true },
+      items: [
+        inv('Open-plan living', 'Couch', 1, 'good', 'Two-seater couch, cream.', 'couch', 40, 0.3, 0.3),
+        inv('Open-plan living', 'Dining chairs', 4, 'good', 'Four dining chairs.', 'item', 75, 0.7, 0.6),
+        inv('Open-plan living', 'Television', 1, 'good', 'Samsung TV with remote.', 'item', 110, 0.15, 0.7),
+        inv('Bedroom', 'Queen bed', 1, 'good', 'Queen bed, linen set of two.', 'item', 260, 0.5, 0.5),
+        inv('Bathroom', 'Towels', 6, 'good', 'Six towels, white.', 'item', 330, 0.5, 0.5),
+      ],
+    },
+  ];
+
+  return { version: 1, inspector: 'J. Delport', properties, inspections };
+}

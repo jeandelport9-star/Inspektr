@@ -1,0 +1,11 @@
+{
+  "name": "Inspektr",
+  "short_name": "Inspektr",
+  "description": "Walk, talk and get a signed inspection report before you leave the property.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1822",
+  "theme_color": "#0f1822",
+  "icons": [{ "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
