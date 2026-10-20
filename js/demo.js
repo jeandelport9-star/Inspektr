@@ -1,4 +1,5 @@
 // Inspektr – demo portfolio so the app looks alive on first open.
+import { standardItems, isTestable, KEYS_AND_METERS } from './vocab.js';
 // Photos are drawn as small SVG scenes; real inspections use camera stills.
 
 const WALLS = ['#d9d3c7', '#cfd6d8', '#e2dccf', '#c9cfc4', '#ddd5cc', '#d3d8de'];
@@ -155,80 +156,163 @@ export function demoState() {
     },
   ];
 
+  const at = (date, time = '09:00') => `${date}T${time}:00+02:00`;
   const inspections = [
     {
-      id: 'i_lyn_in', propertyId: 'p_lynnwood', type: 'ingoing', date: '2026-03-02', inspector: 'J. Delport',
-      status: 'signed', durationSec: 1284, signatures: { tenant: true, owner: true },
+      id: 'i_lyn_in', propertyId: 'p_lynnwood', type: 'ingoing', date: '2026-03-02', startedAt: at('2026-03-02', '09:30'), inspector: 'J. Delport',
+      status: 'signed', durationSec: 1284, signatures: { tenant: true, owner: true, tenantName: 'Thandi Mokoena', ownerName: 'J. Delport' },
+      comments: { agent: 'Property handed over freshly painted. Garden service included in rental.' },
       items: [
-        it('Lounge', 'Walls', 'good', 'Walls freshly painted, no marks.', 'item', 42, 0.3, 0.4),
-        it('Lounge', 'Sliding door', 'good', 'Sliding door runs smoothly, lock works.', 'door', 71, 0.8, 0.2),
-        it('Kitchen', 'Stove', 'good', 'Stove, four plates, all working, oven clean.', 'stove', 188, 0.5, 0.3),
-        it('Kitchen', 'Sink tap', 'good', 'Tap at the sink fine, no drip.', 'leak', 214, 0.2, 0.7),
-        it('Dining room', 'Ceiling', 'good', 'Ceiling clean, light fitting works.', 'item', 320, 0.5, 0.5),
-        it('Bedroom 1', 'Built-in cupboards', 'fair', 'Cupboards, one hinge loose on the left door.', 'door', 455, 0.25, 0.35),
-        it('Bathroom', 'Floor tiles', 'good', 'Floor tiles intact.', 'tile', 540, 0.5, 0.6),
-        it('Bedroom 2', 'Window', 'good', 'Window and burglar bars in good order.', 'window', 610, 0.7, 0.15),
-        it('Bedroom 3', 'Carpet', 'good', 'Carpet clean.', 'item', 702, 0.5, 0.6),
-        it('Lounge', 'Electricity meter', 'good', 'Prepaid meter reading 04812 units.', 'meter', 1201, 0.08, 0.85, { kind: 'note' }),
+        it('Lounge', 'Walls', 'good', 'Walls freshly painted, no marks', 'item', 42, 0.3, 0.4),
+        it('Lounge', 'Doors', 'good', 'Sliding door runs smoothly, lock works', 'door', 71, 0.8, 0.2),
+        it('Kitchen', 'Stove Or Hob', 'good', 'Stove, four plates, all working, oven clean', 'stove', 188, 0.5, 0.3),
+        it('Kitchen', 'Taps', 'good', 'Tap at the sink fine, no drip', 'leak', 214, 0.2, 0.7),
+        it('Bedroom 1', 'Cupboards', 'fair', 'Built-in cupboards, one hinge loose on the left door', 'door', 455, 0.25, 0.35, { damage: 'Wear & Tear', action: 'Landlord to repair' }),
+        it('Bathroom', 'Floors', 'good', 'Floor tiles intact', 'tile', 540, 0.5, 0.6),
+        it('Bedroom 2', 'Windows', 'good', 'Windows and burglar bars in good order', 'window', 610, 0.7, 0.15),
+        it('Lounge', 'Prepaid Electricity Meter', 'good', 'Reading 04812 units', 'meter', 1201, 0.08, 0.85, { kind: 'meter' }),
+        it('Lounge', 'Keys', 'good', '2 front door keys, 1 security gate key, 1 gate remote', 'door', 1230, 0.1, 0.8, { kind: 'meter' }),
       ],
     },
     {
-      id: 'i_lyn_routine', propertyId: 'p_lynnwood', type: 'routine', date: '2026-09-14', inspector: 'J. Delport',
-      status: 'signed', durationSec: 846, linkedId: 'i_lyn_in', signatures: { tenant: true, owner: true },
+      id: 'i_lyn_routine', propertyId: 'p_lynnwood', type: 'routine', date: '2026-09-14', startedAt: at('2026-09-14', '10:00'), inspector: 'J. Delport',
+      status: 'signed', durationSec: 846, linkedId: 'i_lyn_in', signatures: { tenant: true, owner: true, tenantName: 'Thandi Mokoena', ownerName: 'J. Delport' },
+      comments: { agent: 'Tenant keeps the property neat. Three items reported to the landlord.', tenant: 'The tap has been dripping for about two weeks.' },
       items: [
-        it('Kitchen', 'Sink tap', 'defect', 'Tap at the sink is dripping, washer needs replacing.', 'leak', 166, 0.22, 0.68, { job: { status: 'quoted', trade: 'Plumbing', quotes: 3, best: 'R480' } }),
-        it('Bathroom', 'Ceiling', 'defect', 'Damp stain on the bathroom ceiling above the shower.', 'stain', 402, 0.6, 0.25, { job: { status: 'open', trade: 'Waterproofing', quotes: 1 } }),
-        it('Bedroom 2', 'Wall', 'defect', 'Crack in the wall next to the window, about forty centimetres.', 'crack', 571, 0.82, 0.42, { job: { status: 'open', trade: 'Building', quotes: 0 } }),
-        it('Lounge', 'Walls', 'good', 'Lounge walls good.', 'item', 40, 0.3, 0.4),
-        it('Dining room', 'Ceiling', 'good', 'Dining ceiling good.', 'item', 280, 0.5, 0.5),
-        it('Bedroom 1', 'Built-in cupboards', 'fair', 'Cupboard hinge still loose, tenant aware.', 'door', 488, 0.25, 0.35),
+        it('Kitchen', 'Taps', 'defect', 'Tap at the sink is dripping, washer needs replacing', 'leak', 166, 0.22, 0.68, { func: 'Faulty', action: 'Landlord to repair', job: { status: 'quoted', trade: 'Plumbing' } }),
+        it('Bathroom', 'Ceiling', 'defect', 'Damp stain on the ceiling above the shower', 'stain', 402, 0.6, 0.25, { clean: 'Stained', damage: 'Damaged', action: 'Landlord to repair', job: { status: 'approval', trade: 'Waterproofing' } }),
+        it('Bedroom 2', 'Walls', 'defect', 'Crack in the wall next to the window, about forty centimetres', 'crack', 571, 0.82, 0.42, { damage: 'Cracked', action: 'Landlord to repair', job: { status: 'approval', trade: 'Building' } }),
+        it('Lounge', 'Walls', 'fair', '2 nails, some scuff marks behind the couch', 'item', 40, 0.3, 0.4, { damage: 'Wear & Tear' }),
+        it('Bedroom 1', 'Cupboards', 'fair', 'Cupboard hinge still loose, tenant aware', 'door', 488, 0.25, 0.35, { damage: 'Wear & Tear', action: 'Landlord to repair' }),
+        it('Bedroom 1', 'Lights', 'defect', 'Bulb blown x1', 'item', 470, 0.6, 0.2, { func: 'Faulty', action: 'Tenant to replace' }),
       ],
     },
     {
-      id: 'i_hat_in', propertyId: 'p_hatfield', type: 'ingoing', date: '2025-11-01', inspector: 'J. Delport',
-      status: 'signed', durationSec: 1530, signatures: { tenant: true, owner: true },
+      id: 'i_hat_in', propertyId: 'p_hatfield', type: 'ingoing', date: '2025-11-01', startedAt: at('2025-11-01', '08:30'), inspector: 'J. Delport',
+      status: 'signed', durationSec: 1530, signatures: { tenant: true, owner: true, tenantName: 'Kabelo Dlamini', ownerName: 'J. Delport' },
       items: [
-        inv('Lounge', 'Couch', 1, 'good', 'Three-seater couch, grey, good.', 'couch', 60, 0.35, 0.5),
-        inv('Lounge', 'Bar stools', 2, 'fair', 'Two bar stools, oak, one scratched.', 'scratch', 92, 0.85, 0.7),
-        inv('Kitchen', 'Dining chairs', 4, 'good', 'Four dining chairs, black, good.', 'item', 205, 0.5, 0.6),
-        it('Kitchen', 'Stove', 'good', 'Stove and extractor working.', 'stove', 230, 0.3, 0.25),
-        it('Balcony', 'Sliding door', 'good', 'Balcony slider locks.', 'door', 340, 0.5, 0.5),
-        it('Bathroom', 'Shower tiles', 'good', 'Shower tiles and grout clean.', 'tile', 420, 0.5, 0.5),
-        inv('Bedroom 1', 'Double bed', 1, 'good', 'Double bed with mattress, good.', 'item', 610, 0.5, 0.45),
-        inv('Bedroom 2', 'Desk', 1, 'good', 'Desk and chair, good.', 'item', 790, 0.6, 0.4),
+        inv('Lounge', 'Couch', 1, 'good', 'Three-seater couch, grey, good', 'couch', 60, 0.35, 0.5),
+        inv('Lounge', 'Bar stools', 2, 'fair', 'Two bar stools, oak, one scratched', 'scratch', 92, 0.85, 0.7, { damage: 'Wear & Tear' }),
+        inv('Kitchen', 'Dining chairs', 4, 'good', 'Four dining chairs, black', 'item', 205, 0.5, 0.6),
+        it('Kitchen', 'Oven', 'good', 'Oven clean, light and fan working', 'stove', 230, 0.3, 0.25),
+        it('Balcony', 'Doors', 'good', 'Balcony slider locks', 'door', 340, 0.5, 0.5),
+        it('Bathroom', 'Shower', 'good', 'Shower tiles and grout clean', 'tile', 420, 0.5, 0.5),
+        inv('Bedroom 1', 'Double bed', 1, 'good', 'Double bed with mattress', 'item', 610, 0.5, 0.45),
+        inv('Bedroom 2', 'Desk', 1, 'good', 'Desk and chair', 'item', 790, 0.6, 0.4),
+        it('Lounge', 'Keys', 'good', '1 front door key, 1 access tag, 1 remote', 'door', 1490, 0.1, 0.9, { kind: 'meter' }),
       ],
     },
     {
-      id: 'i_bro_routine', propertyId: 'p_brooklyn', type: 'routine', date: '2026-06-10', inspector: 'J. Delport',
-      status: 'signed', durationSec: 702, signatures: { tenant: true, owner: true },
+      id: 'i_hat_out', propertyId: 'p_hatfield', type: 'outgoing', date: '2026-10-15', startedAt: at('2026-10-15', '11:00'), inspector: 'J. Delport',
+      status: 'signed', durationSec: 1390, linkedId: 'i_hat_in', signatures: { tenant: true, owner: true, tenantName: 'Kabelo Dlamini', ownerName: 'J. Delport' },
+      comments: { agent: 'Unit left mostly clean. Deductions agreed with the tenant on site.', tenant: 'I will return the second bar stool by Friday.' },
       items: [
-        it('Lounge', 'Walls', 'good', 'Walls good.', 'item', 30, 0.4, 0.4),
-        it('Kitchen', 'Stove', 'good', 'Stove working.', 'stove', 120, 0.5, 0.3),
-        it('Garage', 'Garage door motor', 'good', 'Garage motor and remotes work.', 'door', 260, 0.5, 0.5),
-        it('En-suite', 'Basin', 'good', 'Basin and tap fine.', 'leak', 410, 0.5, 0.4),
+        inv('Lounge', 'Couch', 1, 'fair', 'Couch stained on the left seat, needs professional cleaning', 'couch', 55, 0.35, 0.5, { clean: 'Stained', damage: 'Undamaged', action: 'Tenant to clean', cost: '450' }),
+        inv('Lounge', 'Bar stools', 1, 'missing', 'Only one bar stool, second one missing', 'scratch', 90, 0.85, 0.7, { damage: 'Missing', action: 'Tenant to replace', cost: '900' }),
+        inv('Kitchen', 'Dining chairs', 4, 'good', 'Four dining chairs, all there', 'item', 200, 0.5, 0.6),
+        it('Kitchen', 'Oven', 'fair', 'Oven dirty, grease on the racks', 'stove', 226, 0.3, 0.25, { clean: 'Dirty', damage: 'Undamaged', func: 'Working', action: 'Tenant to clean', cost: '250' }),
+        it('Bedroom 1', 'Walls', 'defect', 'Nails in walls x6, 2 holes above the bed', 'item', 640, 0.4, 0.3, { damage: 'Damaged', action: 'Tenant to repair', cost: '350' }),
+        it('Bathroom', 'Shower', 'fair', 'Soap holder rusted', 'tile', 430, 0.5, 0.5, { clean: 'Rusted', damage: 'Wear & Tear', func: 'Working' }),
+        inv('Bedroom 1', 'Double bed', 1, 'good', 'Double bed with mattress', 'item', 600, 0.5, 0.45),
+        inv('Bedroom 2', 'Desk', 1, 'good', 'Desk and chair', 'item', 780, 0.6, 0.4),
+        it('Lounge', 'Keys', 'good', '1 front door key, 1 access tag, 1 remote returned', 'door', 1360, 0.1, 0.9, { kind: 'meter' }),
       ],
     },
     {
-      id: 'i_gar_routine', propertyId: 'p_garsfontein', type: 'routine', date: '2026-08-21', inspector: 'J. Delport',
-      status: 'signed', durationSec: 910, signatures: { tenant: true, owner: true },
+      id: 'i_bro_routine', propertyId: 'p_brooklyn', type: 'routine', date: '2026-06-10', startedAt: at('2026-06-10', '14:00'), inspector: 'J. Delport',
+      status: 'signed', durationSec: 702, signatures: { tenant: true, owner: true, tenantName: 'Megan van Wyk', ownerName: 'J. Delport' },
       items: [
-        it('Bathroom', 'Floor tiles', 'defect', 'Cracked floor tile in front of the toilet.', 'tile', 380, 0.45, 0.7, { job: { status: 'done', trade: 'Tiling', quotes: 3, best: 'R650' } }),
-        it('Lounge', 'Window', 'defect', 'Lounge window pane cracked in the corner.', 'window', 75, 0.15, 0.1, { job: { status: 'open', trade: 'Glazing', quotes: 2 } }),
-        it('Kitchen', 'Stove', 'good', 'Stove fine.', 'stove', 190, 0.5, 0.3),
+        it('Lounge', 'Walls', 'good', 'Walls good', 'item', 30, 0.4, 0.4),
+        it('Kitchen', 'Stove Or Hob', 'good', 'Stove working', 'stove', 120, 0.5, 0.3),
+        it('Garage', 'Garage Door Motor', 'good', 'Garage motor and remotes work', 'door', 260, 0.5, 0.5),
+        it('En-suite', 'Washing Basin', 'good', 'Basin and tap fine', 'leak', 410, 0.5, 0.4),
       ],
     },
     {
-      id: 'i_cen_inv', propertyId: 'p_centurion', type: 'inventory', date: '2026-10-01', inspector: 'J. Delport',
-      status: 'signed', durationSec: 640, signatures: { tenant: false, owner: true },
+      id: 'i_gar_routine', propertyId: 'p_garsfontein', type: 'routine', date: '2026-08-21', startedAt: at('2026-08-21', '09:15'), inspector: 'J. Delport',
+      status: 'signed', durationSec: 910, signatures: { tenant: true, owner: true, tenantName: 'Johan Botha', ownerName: 'J. Delport' },
       items: [
-        inv('Open-plan living', 'Couch', 1, 'good', 'Two-seater couch, cream.', 'couch', 40, 0.3, 0.3),
-        inv('Open-plan living', 'Dining chairs', 4, 'good', 'Four dining chairs.', 'item', 75, 0.7, 0.6),
-        inv('Open-plan living', 'Television', 1, 'good', 'Samsung TV with remote.', 'item', 110, 0.15, 0.7),
-        inv('Bedroom', 'Queen bed', 1, 'good', 'Queen bed, linen set of two.', 'item', 260, 0.5, 0.5),
-        inv('Bathroom', 'Towels', 6, 'good', 'Six towels, white.', 'item', 330, 0.5, 0.5),
+        it('Bathroom', 'Floors', 'defect', 'Cracked floor tile in front of the toilet', 'tile', 380, 0.45, 0.7, { damage: 'Cracked', action: 'Landlord to repair', job: { status: 'done', trade: 'Tiling', approvedAt: '2026-08-22', doneAt: '2026-09-02', chosen: { name: 'TileCraft Pretoria', price: 650 } } }),
+        it('Lounge', 'Windows', 'defect', 'Lounge window pane cracked in the corner', 'window', 75, 0.15, 0.1, { damage: 'Cracked', action: 'Landlord to repair', job: { status: 'open', trade: 'Glazing', approvedAt: '2026-08-25' } }),
+        it('Kitchen', 'Stove Or Hob', 'good', 'Stove fine', 'stove', 190, 0.5, 0.3),
+      ],
+    },
+    {
+      id: 'i_cen_inv', propertyId: 'p_centurion', type: 'inventory', date: '2026-10-01', startedAt: at('2026-10-01', '12:00'), inspector: 'J. Delport',
+      status: 'signed', durationSec: 640, signatures: { tenant: false, owner: true, ownerName: 'J. Delport' }, tenantPresent: false,
+      items: [
+        inv('Open-plan living', 'Couch', 1, 'good', 'Two-seater couch, cream', 'couch', 40, 0.3, 0.3),
+        inv('Open-plan living', 'Dining chairs', 4, 'good', 'Four dining chairs', 'item', 75, 0.7, 0.6),
+        inv('Open-plan living', 'Television', 1, 'good', 'Samsung TV with remote', 'item', 110, 0.15, 0.7),
+        inv('Bedroom', 'Queen bed', 1, 'good', 'Queen bed, linen set of two', 'item', 260, 0.5, 0.5),
+        inv('Bathroom', 'Towels', 6, 'good', 'Six towels, white', 'item', 330, 0.5, 0.5),
       ],
     },
   ];
 
-  return { version: 1, inspector: 'J. Delport', properties, inspections };
+  // Fill each inspected room's standard checklist so demo reports read like full SA reports.
+  inspections.forEach((ins) => {
+    if (ins.type === 'inventory') return;
+    const prop = properties.find((pp) => pp.id === ins.propertyId);
+    const rooms = TEMPLATES[prop.template].map((r) => r.name);
+    rooms.forEach((room, ri) => {
+      standardItems(room).forEach((name, ni) => {
+        if (KEYS_AND_METERS.has(name)) return;
+        if (ins.items.some((x) => x.room === room && x.name === name)) return;
+        const testable = isTestable(name);
+        ins.items.push({
+          id: `s_${ins.id}_${ri}_${ni}`, room, name, kind: 'item', qty: 1, condition: 'good', text: '',
+          clean: 'Clean', damage: 'Undamaged', func: testable ? 'Working' : null, t: null, x: null, y: null,
+          confidence: 1, decision: 'accepted', std: true,
+        });
+      });
+    });
+    ins.finalized = true;
+  });
+
+  return { version: 3, inspector: 'J. Delport', properties, inspections, history: demoHistory(), plans: demoPlans() };
+}
+
+
+// ---------- Demo history for the dashboard (summaries of past inspections) ----------
+const DEFECT_POOL = [
+  ['Walls', 9], ['Lights', 8], ['Taps', 7], ['Locks And Keys', 6], ['Floors', 5], ['Ceiling', 5],
+  ['Electrical Sockets', 4], ['Doors', 4], ['Curtains And Blinds', 3], ['Extractor Fan', 3], ['Toilet', 2], ['Garage Door Motor', 2],
+];
+function rng(seed) { let x = seed; return () => { x = (x * 1103515245 + 12345) % 2147483648; return x / 2147483648; }; }
+export function demoHistory() {
+  const r = rng(42);
+  const pickDefect = () => {
+    const total = DEFECT_POOL.reduce((a, [, w]) => a + w, 0);
+    let n = r() * total;
+    for (const [name, w] of DEFECT_POOL) { n -= w; if (n <= 0) return name; }
+    return 'Walls';
+  };
+  const props = ['p_lynnwood', 'p_hatfield', 'p_brooklyn', 'p_garsfontein', 'p_centurion'];
+  const types = ['routine', 'routine', 'ingoing', 'outgoing', 'routine', 'inventory'];
+  const out = [];
+  const now = new Date();
+  for (let m = 11; m >= 0; m -= 1) {
+    const count = 3 + Math.floor(r() * 6) + (m < 4 ? 2 : 0);
+    for (let k = 0; k < count; k += 1) {
+      const d = new Date(now.getFullYear(), now.getMonth() - m, 1 + Math.floor(r() * 27));
+      if (d > now) continue;
+      const type = types[Math.floor(r() * types.length)];
+      const defects = type === 'inventory' ? [] : Array.from({ length: Math.floor(r() * (type === 'outgoing' ? 6 : 4)) }, pickDefect);
+      out.push({
+        date: d.toISOString().slice(0, 10), type, propertyId: props[Math.floor(r() * props.length)],
+        durationSec: 600 + Math.floor(r() * 1500), findings: 40 + Math.floor(r() * 60), defects,
+      });
+    }
+  }
+  return out;
+}
+
+export function demoPlans() {
+  const d = (days) => { const x = new Date(); x.setDate(x.getDate() + days); return x.toISOString().slice(0, 10); };
+  return [
+    { id: 'pl_1', propertyId: 'p_centurion', type: 'inventory', date: d(1), time: '10:00', remind: 60, notes: 'New guests arrive Saturday, check linen count.' },
+    { id: 'pl_2', propertyId: 'p_hatfield', type: 'ingoing', date: d(3), time: '09:00', remind: 1440, notes: 'New tenant. Meet at the gate, collect access tag from body corporate.' },
+    { id: 'pl_3', propertyId: 'p_lynnwood', type: 'routine', date: d(9), time: '14:30', remind: 60, notes: 'Check bathroom ceiling after waterproofing.' },
+  ];
 }

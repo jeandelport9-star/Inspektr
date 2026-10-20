@@ -55,7 +55,20 @@ after a minute or two. The empty `.nojekyll` file makes Pages serve the files as
    deposit deductions.
 8. **Repairs**: send a job to 3 contractors, choose a quote, add a completion photo.
 
+9. **Planner**: schedule inspections on a calendar. Reminders pop up while the app is open, and
+   **Add to calendar** downloads a calendar file so your phone reminds you even when it is closed.
+10. **Dashboard**: inspections per month by type, most common defects, repairs and what is coming up.
+
 **Reset demo data** is at the bottom of the Portfolio page.
+
+## Reports
+
+Reports follow South African practice: every room lists the standard checklist items, each rated
+for cleanliness (Clean, Dusty, Dirty, Stained, Rusted), damage (Undamaged, Wear & Tear, Damaged,
+Cracked, Missing) and function (Working, Faulty, Unable to test), with a recommendation such as
+"Landlord to repair" or "Tenant to clean". Outgoing reports compare every item with the ingoing one.
+
+Put your agency name and your own disclaimer wording in `js/config.js`.
 
 ## Browser support
 
@@ -83,6 +96,8 @@ index.html            App shell
 css/inspektr.css      All styles (night blueprint + survey amber)
 js/app.js             Routing and screens
 js/voice.js           Voice commands and narration parser
+js/vocab.js           SA checklists, ratings and wording
+js/config.js          Agency name and report disclaimer (edit this)
 js/recorder.js        Camera, continuous recording, still capture
 js/floorplan.js       Blueprint floor plan and pins
 js/demo.js            Demo portfolio and illustrated photos

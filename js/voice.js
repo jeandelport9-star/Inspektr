@@ -5,6 +5,8 @@
 // Narration pattern the parser understands best: room → item → condition → command, e.g.
 //   "new room kitchen. stove four plates good. tap at the sink is dripping defect take photo"
 
+import { analyse, conditionFrom, standardName } from './vocab.js';
+
 const COMMANDS = [
   ['finish inspection', 'finish'],
   ['new room', 'room'],
@@ -33,9 +35,7 @@ const NUMBERS = {
   six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, dozen: 12,
 };
 
-const DEFECT_WORDS = /\b(broken|crack(ed|s)?|leak(ing|s)?|drip(ping|s)?|stain(ed|s)?|damp|mou?ld|damaged|torn|missing|rust(y|ed)?|not working|faulty|blocked|burnt|hole|peeling|dent(ed)?)\b/;
-const FAIR_WORDS = /\b(scratch(ed|es)?|chipped|worn|faded|loose|marked|scuffed)\b/;
-const GOOD_WORDS = /\b(good|fine|clean|working|intact|perfect|new|excellent)\b/;
+const RATING_WORD = /^(dirty|dusty|clean|stained|rusted|rusty|faulty|broken|cracked|damaged|missing|worn|loose|leaking|dripping|chipped|scratched|working|undamaged|blown|damp|peeling|bent|torn|not)$/;
 
 const FILLER = new Set(['is', 'are', 'in', 'a', 'an', 'the', 'and', 'at', 'looks', 'looking', 'condition', 'it', 'its', "it's", 'so', 'um', 'uh', 'also', 'then', 'with', 'of']);
 const STOP_AT = new Set(['is', 'are', 'has', 'have', 'looks', 'was', 'with', 'needs', 'seems', 'next', 'near', 'above', 'below', 'behind', 'under', 'by', 'to', 'four', 'three', 'two']);
@@ -73,12 +73,19 @@ function tokenise(text) {
   return out;
 }
 
-/** "tap at the sink is dripping" → "Tap at the sink" */
+/** "tap at the sink is dripping" → "Taps" (standard SA item name), else a short spoken name. */
 export function itemName(text) {
+  const std = standardName(text);
+  if (std) return std;
+  return spokenName(text);
+}
+
+/** "tap at the sink is dripping" → "Tap at the sink" */
+export function spokenName(text) {
   const words = text.split(' ').filter(Boolean);
   const kept = [];
   for (const w of words) {
-    if (STOP_AT.has(w) && kept.length) break;
+    if ((STOP_AT.has(w) || RATING_WORD.test(w)) && kept.length) break;
     kept.push(w);
     if (kept.length >= 5) break;
   }
@@ -88,11 +95,10 @@ export function itemName(text) {
   return name ? cap(name) : 'Item';
 }
 
-export function inferCondition(text) {
-  if (DEFECT_WORDS.test(text)) return { condition: 'defect', confidence: 0.62 };
-  if (FAIR_WORDS.test(text)) return { condition: 'fair', confidence: 0.6 };
-  if (GOOD_WORDS.test(text)) return { condition: 'good', confidence: 0.7 };
-  return { condition: 'unrated', confidence: 0.4 };
+export function inferCondition(text, name = '') {
+  const r = analyse(text, `${name} ${text}`);
+  const condition = conditionFrom(r);
+  return { condition, confidence: condition === 'unrated' ? 0.4 : r.damage || r.func === 'Faulty' ? 0.78 : 0.7 };
 }
 
 function roomName(text) {
@@ -140,8 +146,9 @@ export function parsePhrase(raw) {
   const flushPending = () => {
     if (!pending) return;
     if (!pending.split(' ').some((w) => w && !FILLER.has(w))) { pending = ''; return; }
-    const inferred = inferCondition(pending);
-    events.push({ cmd: 'item', name: itemName(pending), text: tidy(pending), ...inferred });
+    const nm = itemName(pending);
+    const inferred = inferCondition(pending, nm);
+    events.push({ cmd: 'item', name: nm, text: tidy(pending), ...inferred });
     pending = '';
   };
 

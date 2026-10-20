@@ -97,6 +97,7 @@ export function planSVG(property, items = [], opts = {}) {
 
   let n = 0;
   const pins = items.map((it) => {
+    if (it.std || it.x == null) return '';
     const room = matchRoom(property, it.room);
     if (!room) return '';
     const { x, y } = pinPos(room, it);
@@ -124,7 +125,7 @@ export function planSVG(property, items = [], opts = {}) {
 
 /** Items whose room is not on the plan. */
 export function unplacedItems(property, items) {
-  return items.filter((it) => !matchRoom(property, it.room));
+  return items.filter((it) => !it.std && it.x != null && !matchRoom(property, it.room));
 }
 
 /** Converts a pointer event to plan coordinates. */

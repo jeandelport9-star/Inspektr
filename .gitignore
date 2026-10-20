@@ -1,3 +1,7 @@
 .DS_Store
 Thumbs.db
 node_modules/
+
+# Real client reports: never publish (POPIA)
+Sample Reports/
+*.pdf
