@@ -913,26 +913,26 @@ body { font-family: var(--f-ui); font-size: 15px; }
 .brand-word b { color: var(--amber-hi); }
 
 .shell { min-height: 100dvh; }
-.side { display: none; }
+.appside { display: none; }
 .main-col { min-width: 0; display: flex; flex-direction: column; min-height: 100dvh; }
 @media (min-width: 1100px) {
   .shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); }
-  .side {
+  .appside {
     position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; gap: 4px; overflow-y: auto;
     background: var(--navy); color: #c3cfdf; padding: 16px 12px;
   }
-  .side .logo { display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px; text-decoration: none; color: #fff; }
-  .side .logo img { width: 32px; height: auto; }
-  .side .logo b { font: 600 21px/1 var(--f-head); letter-spacing: -.01em; }
-  .side .logo small { display: block; font: 700 9px/1 var(--f-ui); letter-spacing: .14em; color: var(--amber-hi); text-transform: uppercase; margin-top: 4px; }
-  .side .grp { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: #7f93ad; padding: 14px 10px 4px; font-weight: 700; }
-  .side a.nav { display: flex; gap: 11px; align-items: center; padding: 9px 10px; border-radius: 9px; color: #c3cfdf; font-weight: 600; font-size: 14px; text-decoration: none; }
-  .side a.nav svg { width: 19px; height: 19px; }
-  .side a.nav:hover { background: rgba(255, 255, 255, .06); color: #fff; }
-  .side a.nav[aria-current="page"] { background: rgba(255, 255, 255, .1); color: #fff; box-shadow: inset 3px 0 0 var(--amber-hi); }
-  .side a.nav .nbadge { margin-left: auto; }
-  .side .side-cta { margin: 10px 4px 4px; }
-  .side .side-foot { margin-top: auto; padding: 12px 10px 4px; border-top: 1px solid rgba(255, 255, 255, .08); font-size: 12px; color: #7f93ad; line-height: 1.45; }
+  .appside .logo { display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px; text-decoration: none; color: #fff; }
+  .appside .logo img { width: 32px; height: auto; }
+  .appside .logo b { font: 600 21px/1 var(--f-head); letter-spacing: -.01em; }
+  .appside .logo small { display: block; font: 700 9px/1 var(--f-ui); letter-spacing: .14em; color: var(--amber-hi); text-transform: uppercase; margin-top: 4px; }
+  .appside .grp { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: #7f93ad; padding: 14px 10px 4px; font-weight: 700; }
+  .appside a.nav { display: flex; gap: 11px; align-items: center; padding: 9px 10px; border-radius: 9px; color: #c3cfdf; font-weight: 600; font-size: 14px; text-decoration: none; }
+  .appside a.nav svg { width: 19px; height: 19px; }
+  .appside a.nav:hover { background: rgba(255, 255, 255, .06); color: #fff; }
+  .appside a.nav[aria-current="page"] { background: rgba(255, 255, 255, .1); color: #fff; box-shadow: inset 3px 0 0 var(--amber-hi); }
+  .appside a.nav .nbadge { margin-left: auto; }
+  .appside .appside-cta { margin: 10px 4px 4px; }
+  .appside .appside-foot { margin-top: auto; padding: 12px 10px 4px; border-top: 1px solid rgba(255, 255, 255, .08); font-size: 12px; color: #7f93ad; line-height: 1.45; }
   .topbar { display: none; }
   .view { max-width: 1240px; padding: 26px 32px 60px; }
 }
@@ -1147,7 +1147,7 @@ body { font-family: var(--f-ui); font-size: 15px; }
   .glance-lead { font-size: 13pt; }
   .rp-room { break-before: auto; }
 }
-body.is-recording .side { display: none; }
+body.is-recording .appside { display: none; }
 body.is-recording .shell { display: block; }
 .view--flush { max-width: none !important; padding: 0 !important; }
 .picker-bar[hidden] { display: none; }
@@ -1179,3 +1179,27 @@ body.is-recording .shell { display: block; }
 @media (max-width: 640px) { .rp-act { white-space: normal; } }
 .type-opt[aria-pressed="true"] { background: #e2f4f3; border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
 .legal input[type="date"] { max-width: 240px; }
+
+/* Room setup */
+.rb { display: grid; gap: 16px; }
+.rb .label { font-size: 13px; font-weight: 700; color: var(--muted); margin-right: 4px; }
+.rb-presets, .rb-spaces { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip-btn { padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.chip-btn:hover { border-color: var(--amber); }
+.chip-btn[aria-pressed="true"] { background: #e2f4f3; border-color: var(--amber); color: #0b5e5c; }
+.chip-btn[aria-pressed="true"]::before { content: '✓ '; }
+.rb-counts { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); }
+.rb-count { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); }
+.rb-count small { display: block; font-size: 12px; color: var(--muted); font-weight: 500; }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line-2); border-radius: 999px; overflow: hidden; }
+.stepper button { width: 40px; height: 38px; border: 0; background: var(--surface-2); color: var(--text); font-size: 20px; font-weight: 600; cursor: pointer; }
+.stepper button:hover { background: #e2f4f3; }
+.stepper output { min-width: 34px; text-align: center; font: 600 18px/1 var(--f-head); font-variant-numeric: tabular-nums; }
+.rb-add { display: flex; gap: 8px; }
+.rb-add .input { flex: 1; min-width: 0; }
+.rb-list { display: grid; gap: 8px; }
+.room-chip .x { border: 0; background: transparent; color: var(--muted); font-size: 16px; cursor: pointer; padding: 0 0 0 4px; line-height: 1; }
+.rb-preview { border-radius: var(--r-md); background: radial-gradient(120% 90% at 30% 0%, #163a66 0%, var(--navy) 70%); padding: 10px; --text: #e6eef7; --muted: #9fb2c8; }
+.rb-preview .small { color: #9fb2c8; }
+.linkbtn { border: 0; background: none; padding: 0; margin-left: 6px; color: var(--amber); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.sheet .rb-preview svg { max-height: 260px; }

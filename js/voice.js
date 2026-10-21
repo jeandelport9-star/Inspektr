@@ -39,7 +39,7 @@ const RATING_WORD = /^(dirty|dusty|clean|stained|rusted|rusty|faulty|broken|crac
 
 const FILLER = new Set(['is', 'are', 'in', 'a', 'an', 'the', 'and', 'at', 'looks', 'looking', 'condition', 'it', 'its', "it's", 'so', 'um', 'uh', 'also', 'then', 'with', 'of']);
 const STOP_AT = new Set(['is', 'are', 'has', 'have', 'looks', 'was', 'with', 'needs', 'seems', 'next', 'near', 'above', 'below', 'behind', 'under', 'by', 'to', 'four', 'three', 'two']);
-const ROOM_WORDS = /^(kitchen|lounge|bathroom|bedroom|dining|living|garage|balcony|passage|hallway|study|laundry|entrance|patio|garden|toilet|en|ensuite|scullery|main|guest|open|family|tv|pool|stoep|veranda)$/;
+const ROOM_WORDS = /^(kitchen|lounge|bathroom|bedroom|dining|living|garage|balcony|passage|hallway|study|office|laundry|entrance|patio|garden|toilet|en|ensuite|scullery|pantry|main|guest|open|family|tv|pool|stoep|veranda|braai|lapa|front|back|outside|flatlet|cottage|store|storeroom|staff|dressing)$/;
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 function tidy(text) {
@@ -101,17 +101,22 @@ export function inferCondition(text, name = '') {
   return { condition, confidence: condition === 'unrated' ? 0.4 : r.damage || r.func === 'Faulty' ? 0.78 : 0.7 };
 }
 
+const ORDINAL = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, '2nd': 2, '3rd': 3, '4th': 4 };
+const NUM_WORD = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8 };
+
 function roomName(text) {
-  const words = text.split(' ').filter((w) => w && !['the', 'is', 'a'].includes(w));
+  let words = text.split(' ').filter((w) => w && !['the', 'is', 'a'].includes(w));
+  // "second bathroom" -> "bathroom 2"
+  if (ORDINAL[words[0]] && words[1] && ROOM_WORDS.test(words[1])) words = [words[1], String(ORDINAL[words[0]]), ...words.slice(2)];
   // Known room words take the room word plus a qualifier ("bedroom two", "dining room", "main bedroom").
   let take = Math.min(2, words.length);
   if (words.length && ROOM_WORDS.test(words[0])) {
     take = 1;
     const second = words[1] || '';
-    if (/^(room|bedroom|suite|plan|toilet|living|\d+|one|two|three|four|five)$/.test(second)) take = 2;
-    if (take === 2 && /^(living|bedroom)$/.test(second) && words[2] && /^(room|\d+|one|two|three)$/.test(words[2])) take = 3;
+    if (/^(room|bedroom|bathroom|suite|plan|toilet|living|yard|room|\d+|one|two|three|four|five|six)$/.test(second)) take = 2;
+    if (take === 2 && /^(living|bedroom|bathroom)$/.test(second) && words[2] && /^(room|\d+|one|two|three|four)$/.test(words[2])) take = 3;
   }
-  const name = words.slice(0, take).join(' ');
+  const name = words.slice(0, take).map((w) => (NUM_WORD[w] ? String(NUM_WORD[w]) : w)).join(' ');
   return { name: name ? name.replace(/\b\w/g, (c) => c.toUpperCase()) : 'Room', rest: words.slice(take).join(' ') };
 }
 

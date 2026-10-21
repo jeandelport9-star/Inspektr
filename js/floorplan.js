@@ -13,6 +13,7 @@ const NUM = { one: '1', two: '2', three: '3', four: '4', five: '5', six: '6' };
 export function normRoom(name) {
   return String(name || '').toLowerCase()
     .replace(/\b(one|two|three|four|five|six)\b/g, (w) => NUM[w])
+    .replace(/\b(first|second|third|fourth)\s+(\w+)/g, (m, o, r) => `${r} ${{ first: 1, second: 2, third: 3, fourth: 4 }[o]}`)
     .replace(/\b(the|room)\b/g, (w) => (w === 'room' ? 'room' : ''))
     .replace(/en suite|en-suite|ensuite/g, 'en-suite')
     .replace(/living room/g, 'lounge')
@@ -21,7 +22,18 @@ export function normRoom(name) {
 }
 
 export function roomsFor(property) {
-  return property.rooms || TEMPLATES[property.template] || TEMPLATES.house3;
+  if (property.rooms) return property.rooms;
+  if (property.template && property.template !== 'walk' && TEMPLATES[property.template]) return TEMPLATES[property.template];
+  return []; // No plan yet: it is built from the rooms named during the walk-through.
+}
+
+const numOf = (n) => (n.match(/\b(\d+)\b/) || [])[1] || null;
+const baseOf = (n) => n.replace(/\b\d+\b/g, '').replace(/\s+/g, ' ').trim();
+/** Same room type, different number ("Bedroom 2" vs "Bedroom 4", "Bathroom" vs "Bathroom 2"). */
+function numberClash(a, b) {
+  const na = numOf(a); const nb = numOf(b);
+  if (na === nb) return false;
+  return (na || '1') !== (nb || '1');
 }
 
 /** Finds the plan room matching a spoken room name, or null. */
@@ -29,10 +41,65 @@ export function matchRoom(property, name) {
   const rooms = roomsFor(property);
   const n = normRoom(name);
   if (!n) return null;
+  const ok = (r) => !numberClash(normRoom(r.name), n);
   return rooms.find((r) => normRoom(r.name) === n)
-    || rooms.find((r) => normRoom(r.name).startsWith(n) || n.startsWith(normRoom(r.name)))
-    || rooms.find((r) => n.split(' ').some((w) => w.length > 3 && normRoom(r.name).includes(w)))
+    || rooms.find((r) => ok(r) && baseOf(normRoom(r.name)) === baseOf(n))
+    || rooms.find((r) => ok(r) && (normRoom(r.name).startsWith(n) || n.startsWith(normRoom(r.name))))
+    || rooms.find((r) => ok(r) && n.split(' ').some((w) => w.length > 3 && !/^(room|main|guest)$/.test(w) && normRoom(r.name).split(' ').includes(w)))
     || null;
+}
+
+/** Relative floor area by room type, used to size rooms on an automatic plan. */
+function weightOf(name) {
+  const n = name.toLowerCase();
+  if (/open.?plan|lounge|living|family|tv/.test(n)) return 1.6;
+  if (/main bed|master/.test(n)) return 1.35;
+  if (/garage/.test(n)) return 1.3;
+  if (/garden|yard|patio|braai|lapa|pool|outside|stoep|veranda/.test(n)) return 1.2;
+  if (/kitchen|dining|bedroom|study|office|flatlet|cottage/.test(n)) return 1.1;
+  if (/en.?suite|bath|shower/.test(n)) return 0.75;
+  if (/toilet|wc|laundry|scullery|pantry|store|passage|hall|entrance|dressing/.test(n)) return 0.6;
+  return 0.9;
+}
+
+/**
+ * Lays out the named rooms, in walking order, as a simple block plan of PLAN_W × PLAN_H.
+ * Not to scale: it shows which rooms there are and where findings are, not the real shape.
+ */
+export function autoLayout(names) {
+  const list = names.filter(Boolean);
+  if (!list.length) return [];
+  const rowsN = list.length <= 3 ? 1 : list.length <= 8 ? 2 : list.length <= 14 ? 3 : 4;
+  const perRow = Math.ceil(list.length / rowsN);
+  const rows = [];
+  for (let i = 0; i < list.length; i += perRow) rows.push(list.slice(i, i + perRow));
+  const out = [];
+  let y = 0;
+  rows.forEach((row, ri) => {
+    const h = ri === rows.length - 1 ? PLAN_H - y : Math.round(PLAN_H / rows.length);
+    const total = row.reduce((s, n) => s + weightOf(n), 0);
+    let acc = 0; let x = 0;
+    row.forEach((name, i) => {
+      acc += weightOf(name);
+      const x2 = i === row.length - 1 ? PLAN_W : Math.round((acc / total) * PLAN_W);
+      out.push({ name, x, y, w: x2 - x, h });
+      x = x2;
+    });
+    y += h;
+  });
+  return out;
+}
+
+/** Bedroom and bathroom counts from a room list, e.g. "2 bedrooms, 2 bathrooms". */
+export function roomSummary(rooms) {
+  const names = rooms.map((r) => (typeof r === 'string' ? r : r.name).toLowerCase());
+  const bed = names.filter((n) => /bed/.test(n) && !/en.?suite|bath/.test(n)).length;
+  const bath = names.filter((n) => /bath|en.?suite|shower/.test(n)).length;
+  const parts = [];
+  if (bed) parts.push(`${bed} bedroom${bed === 1 ? '' : 's'}`);
+  if (bath) parts.push(`${bath} bathroom${bath === 1 ? '' : 's'}`);
+  if (!parts.length && names.length) parts.push(`${names.length} room${names.length === 1 ? '' : 's'}`);
+  return parts.join(', ');
 }
 
 /** Plan coordinates for an item (its x/y are 0–1 inside its room). */

@@ -3,7 +3,7 @@
 import { loadState, saveState, clearState, clearMedia, putMedia, mediaUrl, uid } from './store.js';
 import { demoState, demoArt, TEMPLATES, TEMPLATE_LABELS, withLegalDemo } from './demo.js';
 import {
-  planSVG, roomsFor, matchRoom, unplacedItems, eventToPlan, roomAt, toRoomXY, autoSpot, normRoom,
+  planSVG, roomsFor, matchRoom, autoLayout, roomSummary, unplacedItems, eventToPlan, roomAt, toRoomXY, autoSpot, normRoom,
 } from './floorplan.js';
 import { parsePhrase, createRecognizer, speechSupported } from './voice.js';
 import {
@@ -11,6 +11,7 @@ import {
   SEVERITY, SEVERITY_RANK, severityOf, explain,
 } from './vocab.js';
 import { AGENCY, DISCLAIMER } from './config.js';
+import { roomBuilderHTML, mountRoomBuilder, setupFromNames, namesFromSetup, PRESETS } from './rooms.js';
 import { legalChecks, lawRowsHTML, LAW_SOURCE, addDays } from './law.js';
 import { openCamera, stopStream, startRecording, captureStill, steady, artFor } from './recorder.js';
 import {
@@ -104,9 +105,9 @@ function shell(active) {
   const cur = (k) => (active === k ? 'aria-current="page"' : '');
   return `
   <div class="shell">
-  <aside class="side" aria-label="Main">
+  <aside class="appside" aria-label="Main">
     <a class="logo" href="#/"><img src="assets/ava-mark.png" alt=""><span><b>Inspektr</b><small>by AVA</small></span></a>
-    <a class="btn btn--primary side-cta" href="#/new">${icon.rec}Start inspection</a>
+    <a class="btn btn--primary appside-cta" href="#/new">${icon.rec}Start inspection</a>
     <div class="grp">Work</div>
     <a class="nav" href="#/" ${cur('home')}>${icon.map}Portfolio</a>
     <a class="nav" href="#/planner" ${cur('planner')}>${icon.calendar}Planner<span class="nbadge" data-plan-badge hidden></span></a>
@@ -114,7 +115,7 @@ function shell(active) {
     <div class="grp">Insights</div>
     <a class="nav" href="#/dashboard" ${cur('dashboard')}>${icon.chart}Dashboard</a>
     <a class="nav" href="#/branding" ${cur('branding')}>${icon.brush}Report builder</a>
-    <div class="side-foot">Inspections follow the Rental Housing Act 50 of 1999 (s5) and POPIA.</div>
+    <div class="appside-foot">Inspections follow the Rental Housing Act 50 of 1999 (s5) and POPIA.</div>
   </aside>
   <div class="main-col">
   <header class="topbar">
@@ -324,7 +325,7 @@ function viewProperty(view, id, params) {
       <span>${esc(p.suburb)}</span>
       <span>Tenant <b>${esc(p.tenant || 'None')}</b></span>
       <span>Owner <b>${esc(p.owner || '')}</b></span>
-      <span>${esc(TEMPLATE_LABELS[p.template] || 'Custom layout')}${p.furnished ? ', furnished' : ''}</span>
+      <span>${esc(roomSummary(roomsFor(p)) || 'No rooms set up')}${p.furnished ? ', furnished' : ''} <button class="linkbtn" id="editrooms">Edit rooms</button></span>
       <span>${esc(dueText(p.nextDue))}</span>
     </div>
   </div>
@@ -376,6 +377,7 @@ function viewProperty(view, id, params) {
   if (selected) setTimeout(() => openFinding(selected), 400);
 
   view.addEventListener('click', (e) => {
+    if (e.target.closest('#editrooms')) { openRoomEditor(p, () => route()); return; }
     const pin = e.target.closest('.pin');
     const open = e.target.closest('[data-open]');
     const leg = e.target.closest('#legend button');
@@ -528,7 +530,9 @@ function viewNew(view, pid, params = new URLSearchParams()) {
         ${type === 'routine' ? '<span>Give the tenant reasonable notice and inspect at a reasonable time.</span>' : ''}
         <label class="toggle"><input type="checkbox" id="nc" ${form.consent ? 'checked' : ''}><span>Everyone present knows this walk-through is recorded on video and audio, and why (POPIA)</span></label>
       </section>
-      ${p ? `<div class="field"><span class="label">Rooms on the plan, in walking order</span><div class="rooms-check">${roomsFor(p).map((r) => `<span class="room-chip">${esc(r.name)}</span>`).join('')}</div></div>` : ''}
+      ${p ? (roomsFor(p).length
+        ? `<div class="field"><span class="label">Rooms so far${roomSummary(roomsFor(p)) ? ` (${esc(roomSummary(roomsFor(p)))})` : ''}</span><div class="rooms-check">${roomsFor(p).map((r) => `<span class="room-chip">${esc(r.name)}</span>`).join('')}</div><button type="button" class="btn btn--sm" id="editrooms" style="justify-self:start">Edit rooms</button><span class="tiny muted">Say any room that isn’t here, such as “new room bathroom 2”, and it is added to the property.</span></div>`
+        : `<div class="field"><span class="label">Rooms</span><button type="button" class="btn btn--sm" id="editrooms" style="justify-self:start">Set up rooms</button><span class="small muted">Or skip this: Say each room as you walk in, such as “new room bedroom 2” or “second bathroom”. Inspektr builds the room list and floor plan from what you say, so a 2-bedroom, 2-bathroom home comes out exactly like that.</span></div>`) : ''}
       <section class="panel">
         <h2 class="h3">How to inspect</h2>
         <p class="small muted" style="margin:0">Press record once and walk. Say the room, the item and its condition. Or tap instead of talking.</p>
@@ -561,6 +565,7 @@ function viewNew(view, pid, params = new URLSearchParams()) {
   });
   view.addEventListener('click', (e) => {
     const t = e.target.closest('.type-opt');
+    if (e.target.closest('#editrooms') && p) { keepForm(); openRoomEditor(p, () => { const keep = $('#ni').value; render(); $('#ni').value = keep; }); return; }
     if (t) { keepForm(); type = t.dataset.t; const keep = $('#ni').value; render(); $('#ni').value = keep; return; }
     if (e.target.closest('#go') && p) {
       keepForm();
@@ -594,9 +599,9 @@ function viewRecord(view, id) {
   document.body.classList.add('is-recording');
   view.classList.add('view--flush');
   if (!ins.startedAt) { ins.startedAt = new Date().toISOString(); save(); }
-  const rooms = roomsFor(p);
+  const rooms = roomsFor(p).map((r) => ({ name: r.name }));
   const S = {
-    room: rooms[0].name, done: new Set(), last: null, lastAt: 0, actions: [],
+    room: rooms[0]?.name || 'Entrance', done: new Set(), last: null, lastAt: 0, actions: [],
     started: performance.now(), pausedFor: 0, pausedAt: 0, paused: false,
     stream: null, recorder: null, rec: null, mic: false, finishing: false,
   };
@@ -719,20 +724,22 @@ function viewRecord(view, id) {
 
   // ----- actions
   function setRoom(name, spoken = true) {
-    const match = matchRoom(p, name);
+    const match = matchRoom(p, name) || rooms.find((r) => normRoom(r.name) === normRoom(name));
     const next = match ? match.name : name;
     if (normRoom(next) === normRoom(S.room)) return;
+    if (!match) rooms.push({ name: next });
     S.actions.push({ type: 'room', prev: S.room });
     S.done.add(normRoom(S.room));
     S.room = next;
     S.last = null;
     paintRoom();
-    logLine(next + (match ? '' : ' (not on plan)'), 'room');
+    logLine(next + (match ? '' : ' (new room, added)'), 'room');
     if (spoken) sound.beep();
   }
   function nextRoom() {
     const idx = rooms.findIndex((r) => normRoom(r.name) === normRoom(S.room));
-    const nxt = rooms[(idx + 1) % rooms.length];
+    if (idx === -1 || idx === rooms.length - 1) { toast('Say the name of the next room, such as “new room bedroom 2”'); return; }
+    const nxt = rooms[idx + 1];
     setRoom(nxt.name, false);
     sound.beep();
   }
@@ -999,6 +1006,29 @@ function finalize(ins) {
   });
   ins.items = merged;
   ins.finalized = true;
+  updatePlanFromWalk(prop(ins.propertyId));
+}
+
+/**
+ * Builds or extends the property's floor plan from the rooms actually named during inspections,
+ * so the plan shows what the house has (2 bed, 2 bath…) instead of an assumed layout.
+ * Hand-drawn plans (such as the anonymised samples) are left alone.
+ */
+function updatePlanFromWalk(p) {
+  if (!p || p.sample || (p.rooms && !p.autoPlan)) return;
+  const walks = inspectionsFor(p.id).filter((i) => i.type !== 'inventory').sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const names = (p.rooms || []).map((r) => r.name);
+  const seen = (n) => names.some((x) => normRoom(x) === normRoom(n) || matchRoom({ rooms: [{ name: x }] }, n));
+  walks.forEach((w) => (w.items || []).forEach((it) => {
+    if (it.kind === 'meter' || !it.room || it.std) return;
+    if (!seen(it.room)) names.push(it.room);
+  }));
+  if (!names.length) return;
+  const before = (p.rooms || []).map((r) => r.name).join('|');
+  p.rooms = autoLayout(names);
+  p.autoPlan = true;
+  delete p.template;
+  if (p.rooms.map((r) => r.name).join('|') !== before) save();
 }
 
 /** Sorts a room's items in checklist order, with extra items after. */
@@ -2383,6 +2413,43 @@ function viewBranding(view) {
 }
 
 // ============================================================ ADD PROPERTY
+/** Saves a room list as the property's floor plan. */
+function applyRooms(p, names, cfg) {
+  p.rooms = autoLayout(names);
+  p.autoPlan = true;
+  p.roomSetup = cfg;
+  delete p.template;
+  save();
+}
+
+/** Sheet for setting up or changing which rooms a property has. */
+function openRoomEditor(p, onDone) {
+  const cur = roomsFor(p).map((r) => r.name);
+  // Use the saved setup unless rooms were added since (for example during a walk-through).
+  const cfg = p.roomSetup && namesFromSetup(p.roomSetup).join('|') === cur.join('|') ? p.roomSetup
+    : cur.length ? setupFromNames(cur) : PRESETS.house;
+  const sheet = openSheet(`<div class="stack">
+    <div><h2 class="h3" style="font-size:21px">Rooms at ${esc(p.name)}</h2><p class="small muted" style="margin:4px 0 0">Set what the property actually has. Findings, the checklist and the floor plan follow this list. Rooms you name during the walk that aren’t here are added automatically.</p></div>
+    ${roomBuilderHTML(cfg)}
+    <div class="rb-preview" id="rbprev"></div>
+    ${p.rooms && !p.autoPlan ? '<p class="small" style="color:var(--fair);margin:0">This property has a drawn floor plan. Saving replaces it with a simple room plan.</p>' : ''}
+    <div style="display:flex;gap:10px"><button class="btn btn--primary" id="rbsave">${icon.check}Save rooms</button><button class="btn" data-close>Cancel</button></div>
+  </div>`);
+  const root = sheet.querySelector ? sheet : document;
+  const rb = mountRoomBuilder($('[data-rb]', root), cfg, (names) => {
+    const el = $('#rbprev', root);
+    if (el) el.innerHTML = names.length ? planSVG({ name: p.name, rooms: autoLayout(names) }, [], { id: 'rbp' }) : '<span class="small muted">No rooms yet</span>';
+  });
+  $('#rbsave', root).addEventListener('click', () => {
+    const names = rb.names();
+    if (!names.length) { toast('Add at least one room'); return; }
+    applyRooms(p, names, rb.config());
+    closeSheet();
+    toast('Rooms saved');
+    onDone?.();
+  });
+}
+
 function viewAdd(view) {
   let pos = null;
   view.innerHTML = `
@@ -2391,8 +2458,12 @@ function viewAdd(view) {
     <div class="field"><label for="an">Address or unit</label><input class="input" id="an" required placeholder="e.g. 18 Protea Street"></div>
     <div class="row2">
       <div class="field"><label for="as">Suburb and city</label><input class="input" id="as" required placeholder="e.g. Waterkloof, Pretoria"></div>
-      <div class="field"><label for="al">Layout</label><select class="select" id="al">${Object.entries(TEMPLATE_LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
     </div>
+    <section class="panel">
+      <div><h2 class="h3">Rooms</h2><p class="small muted" style="margin:4px 0 0">What does the property have? Choose a starting point, then set the bedrooms, bathrooms and other spaces. Rooms you name during the walk that aren’t here are added automatically.</p></div>
+      ${roomBuilderHTML(PRESETS.house)}
+      <div class="rb-preview" id="rbprev"></div>
+    </section>
     <div class="row2">
       <div class="field"><label for="at">Tenant</label><input class="input" id="at" placeholder="Name"></div>
       <div class="field"><label for="ao">Owner</label><input class="input" id="ao" placeholder="Name"></div>
@@ -2405,6 +2476,10 @@ function viewAdd(view) {
       <div style="display:flex;gap:10px;align-items:center"><button type="button" class="btn btn--sm" id="here">${icon.locate}Use my location</button><span class="small muted" id="apos">No location set</span></div></div>
     <button class="btn btn--primary btn--block">Save property</button>
   </form>`;
+  const rb = mountRoomBuilder($('[data-rb]', view), PRESETS.house, (names) => {
+    const el = $('#rbprev', view);
+    if (el) el.innerHTML = names.length ? planSVG({ name: 'New property', rooms: autoLayout(names) }, [], { id: 'rbp' }) : '<span class="small muted">No rooms yet</span>';
+  });
   const map = makeMap($('#amap'), { scroll: true });
   let marker = null;
   const setPos = (lat, lng) => {
@@ -2425,9 +2500,10 @@ function viewAdd(view) {
   $('#addform').addEventListener('submit', (e) => {
     e.preventDefault();
     if (!pos) { toast('Set the location on the map'); return; }
+    if (!rb.names().length) { toast('Add the rooms the property has'); return; }
     const pnew = {
       id: uid('p'), name: $('#an').value.trim(), suburb: $('#as').value.trim(), lat: pos.lat, lng: pos.lng,
-      template: $('#al').value, furnished: $('#af').checked, tenant: $('#at').value.trim(), owner: $('#ao').value.trim(), nextDue: $('#ad').value || null,
+      rooms: autoLayout(rb.names()), autoPlan: true, roomSetup: rb.config(), furnished: $('#af').checked, tenant: $('#at').value.trim(), owner: $('#ao').value.trim(), nextDue: $('#ad').value || null,
     };
     state.properties.push(pnew); save(); toast('Property added');
     go(`#/property/${pnew.id}`);

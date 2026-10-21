@@ -123,3 +123,10 @@ Map tiles: © OpenStreetMap contributors, © CARTO.
 - Ingoing: joint inspection before move-in, lease dates, and the mandatory disclosure form (Property Practitioners Act s67).
 - Outgoing: the lease end date is checked against the Rental Housing Act windows (joint inspection within 3 days before the lease ends; within 7 days after if the tenant is absent), and the report shows the deposit refund deadline (7, 14 or 21 days).
 - The report ends with a "Legal requirements" section. This is guidance, not legal advice.
+
+## Rooms: set up per property
+
+- When you add a property, set what it actually has: start from House, Townhouse, Flat or Studio, then set bedrooms, bathrooms, en-suites and guest toilets, tick the other spaces (garage, scullery, pool…) and add any other room. A floor plan is drawn from that list.
+- Change it any time with **Edit rooms** on the property page or on the New inspection screen.
+- During the walk, saying a room that isn't on the list ("new room second bathroom", "bedroom four") adds it to the property. Bedroom 4 is no longer mistaken for Bedroom 1.
+- The plan is a simple room diagram in walking order, not a scaled drawing.
